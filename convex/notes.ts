@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getCurrentUser } from "./users";
+import { createNotification } from "./notifications";
 
 export const listByProject = query({
   args: { projectId: v.id("projects") },
@@ -34,12 +35,24 @@ export const create = mutation({
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
 
+    const project = await ctx.db.get(args.projectId);
+
     await ctx.db.insert("notes", {
       content: args.content,
       projectId: args.projectId,
       authorId: user._id,
       createdAt: Date.now(),
     });
+
+    if (project) {
+      await createNotification(ctx, {
+        userId: user._id,
+        type: "note_added",
+        title: "Note added",
+        message: `New note in "${project.name}": ${args.content.slice(0, 80)}${args.content.length > 80 ? "..." : ""}`,
+        linkTo: `/projects/${args.projectId}`,
+      });
+    }
   },
 });
 

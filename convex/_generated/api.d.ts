@@ -9,7 +9,10 @@
  */
 
 import type * as activity from "../activity.js";
+import type * as crons from "../crons.js";
 import type * as notes from "../notes.js";
+import type * as notifications from "../notifications.js";
+import type * as overdueChecker from "../overdueChecker.js";
 import type * as projects from "../projects.js";
 import type * as tasks from "../tasks.js";
 import type * as users from "../users.js";
@@ -22,7 +25,10 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   activity: typeof activity;
+  crons: typeof crons;
   notes: typeof notes;
+  notifications: typeof notifications;
+  overdueChecker: typeof overdueChecker;
   projects: typeof projects;
   tasks: typeof tasks;
   users: typeof users;

@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getCurrentUser } from "./users";
+import { createNotification } from "./notifications";
 
 export const list = query({
   handler: async (ctx) => {
@@ -54,6 +55,22 @@ export const update = mutation({
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Task not found");
     if (existing.ownerId !== user._id) throw new Error("Not authorized");
+
+    // Notify when task is marked done
+    if (fields.status === "done" && existing.status !== "done") {
+      let projectName = "";
+      if (existing.projectId) {
+        const project = await ctx.db.get(existing.projectId);
+        projectName = project ? ` in ${project.name}` : "";
+      }
+      await createNotification(ctx, {
+        userId: user._id,
+        type: "task_completed",
+        title: "Task completed",
+        message: `"${existing.title}"${projectName} has been marked as done.`,
+        linkTo: "/tasks",
+      });
+    }
 
     await ctx.db.patch(id, fields);
   },

@@ -7,6 +7,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
+import { NotificationBell } from "./notification-bell";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -17,6 +18,7 @@ export function Sidebar() {
   const navItems = [
     { label: "Dashboard", href: "/dashboard", icon: "📊" },
     { label: "Tasks", href: "/tasks", icon: "✅", badge: todoCount > 0 ? todoCount : undefined },
+    { label: "Board", href: "/board", icon: "📋" },
     { label: "Projects", href: "/projects", icon: "📁" },
     { label: "Calendar", href: "/calendar", icon: "📅" },
     { label: "Settings", href: "/settings", icon: "⚙️" },
@@ -24,8 +26,9 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-screen w-64 flex-col border-r bg-card">
-      <div className="flex items-center gap-2 border-b px-6 py-4">
+      <div className="flex items-center justify-between border-b px-6 py-4">
         <span className="text-xl font-bold">FH Enterprise</span>
+        <NotificationBell />
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-4">

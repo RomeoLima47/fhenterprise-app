@@ -40,4 +40,22 @@ export default defineSchema({
     authorId: v.id("users"),
     createdAt: v.number(),
   }).index("by_project", ["projectId"]),
+
+  notifications: defineTable({
+    userId: v.id("users"),
+    type: v.union(
+      v.literal("task_overdue"),
+      v.literal("task_completed"),
+      v.literal("project_archived"),
+      v.literal("note_added"),
+      v.literal("system")
+    ),
+    title: v.string(),
+    message: v.string(),
+    read: v.boolean(),
+    linkTo: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_read", ["userId", "read"]),
 });

@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getCurrentUser } from "./users";
+import { createNotification } from "./notifications";
 
 export const list = query({
   handler: async (ctx) => {
@@ -24,7 +25,7 @@ export const create = mutation({
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
 
-    return await ctx.db.insert("projects", {
+    await ctx.db.insert("projects", {
       ...args,
       status: "active",
       ownerId: user._id,
@@ -48,6 +49,16 @@ export const update = mutation({
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Project not found");
     if (existing.ownerId !== user._id) throw new Error("Not authorized");
+
+    if (fields.status === "archived" && existing.status === "active") {
+      await createNotification(ctx, {
+        userId: user._id,
+        type: "project_archived",
+        title: "Project archived",
+        message: `"${existing.name}" has been archived.`,
+        linkTo: "/projects",
+      });
+    }
 
     await ctx.db.patch(id, fields);
   },
