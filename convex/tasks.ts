@@ -8,11 +8,43 @@ export const list = query({
     const user = await getCurrentUser(ctx);
     if (!user) return [];
 
-    return await ctx.db
+    // Own tasks
+    const ownTasks = await ctx.db
       .query("tasks")
       .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
       .order("desc")
       .collect();
+
+    // Tasks from shared projects (where user is a member)
+    const memberships = await ctx.db
+      .query("projectMembers")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    const sharedProjectIds = memberships
+      .filter((m) => m.role !== "owner")
+      .map((m) => m.projectId);
+
+    const sharedTasks = [];
+    for (const pid of sharedProjectIds) {
+      const projectTasks = await ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", pid))
+        .collect();
+      sharedTasks.push(...projectTasks);
+    }
+
+    // Combine and deduplicate
+    const allIds = new Set<string>();
+    const all = [];
+    for (const t of [...ownTasks, ...sharedTasks]) {
+      if (!allIds.has(t._id)) {
+        allIds.add(t._id);
+        all.push(t);
+      }
+    }
+
+    return all.sort((a, b) => b.createdAt - a.createdAt);
   },
 });
 
@@ -54,9 +86,20 @@ export const update = mutation({
     const { id, ...fields } = args;
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Task not found");
-    if (existing.ownerId !== user._id) throw new Error("Not authorized");
 
-    // Notify when task is marked done
+    // Allow update if owner or member of the project
+    let hasAccess = existing.ownerId === user._id;
+    if (!hasAccess && existing.projectId) {
+      const membership = await ctx.db
+        .query("projectMembers")
+        .withIndex("by_project_user", (q) =>
+          q.eq("projectId", existing.projectId!).eq("userId", user._id)
+        )
+        .first();
+      hasAccess = !!membership && membership.role !== "viewer";
+    }
+    if (!hasAccess) throw new Error("Not authorized");
+
     if (fields.status === "done" && existing.status !== "done") {
       let projectName = "";
       if (existing.projectId) {
@@ -64,7 +107,7 @@ export const update = mutation({
         projectName = project ? ` in ${project.name}` : "";
       }
       await createNotification(ctx, {
-        userId: user._id,
+        userId: existing.ownerId,
         type: "task_completed",
         title: "Task completed",
         message: `"${existing.title}"${projectName} has been marked as done.`,
@@ -84,7 +127,18 @@ export const remove = mutation({
 
     const existing = await ctx.db.get(args.id);
     if (!existing) throw new Error("Task not found");
-    if (existing.ownerId !== user._id) throw new Error("Not authorized");
+
+    let hasAccess = existing.ownerId === user._id;
+    if (!hasAccess && existing.projectId) {
+      const membership = await ctx.db
+        .query("projectMembers")
+        .withIndex("by_project_user", (q) =>
+          q.eq("projectId", existing.projectId!).eq("userId", user._id)
+        )
+        .first();
+      hasAccess = !!membership && membership.role === "editor";
+    }
+    if (!hasAccess) throw new Error("Not authorized");
 
     await ctx.db.delete(args.id);
   },

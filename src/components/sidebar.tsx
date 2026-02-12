@@ -12,8 +12,10 @@ import { NotificationBell } from "./notification-bell";
 export function Sidebar() {
   const pathname = usePathname();
   const tasks = useQuery(api.tasks.list);
+  const pendingInvites = useQuery(api.invitations.listMyPending);
 
   const todoCount = tasks?.filter((t) => t.status !== "done").length ?? 0;
+  const inviteCount = pendingInvites?.length ?? 0;
 
   const navItems = [
     { label: "Dashboard", href: "/dashboard", icon: "📊" },
@@ -21,6 +23,7 @@ export function Sidebar() {
     { label: "Board", href: "/board", icon: "📋" },
     { label: "Projects", href: "/projects", icon: "📁" },
     { label: "Calendar", href: "/calendar", icon: "📅" },
+    { label: "Invitations", href: "/invitations", icon: "📬", badge: inviteCount > 0 ? inviteCount : undefined },
     { label: "Settings", href: "/settings", icon: "⚙️" },
   ];
 

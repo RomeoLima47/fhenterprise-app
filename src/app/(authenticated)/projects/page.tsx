@@ -50,6 +50,9 @@ export default function ProjectsPage() {
     };
   };
 
+  const ownedProjects = projects.filter((p) => p.isOwner);
+  const sharedProjects = projects.filter((p) => !p.isOwner);
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -90,75 +93,130 @@ export default function ProjectsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {projects.map((project) => {
-            const counts = getTaskCounts(project._id);
-            const progress = counts.total > 0 ? Math.round((counts.done / counts.total) * 100) : 0;
-            return (
-              <Card
-                key={project._id}
-                className="cursor-pointer transition-all hover:bg-muted/50 hover:shadow-md"
-                onClick={() => router.push(`/projects/${project._id}`)}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <CardTitle className="text-lg">{project.name}</CardTitle>
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <Badge
-                        variant="secondary"
-                        className={
-                          project.status === "active"
-                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                            : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
-                        }
-                      >
-                        {project.status}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          updateProject({
-                            id: project._id,
-                            status: project.status === "active" ? "archived" : "active",
-                          })
-                        }
-                      >
-                        {project.status === "active" ? "📦" : "♻️"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteProject({ id: project._id })}
-                      >
-                        🗑️
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {project.description && (
-                    <p className="mb-3 text-sm text-muted-foreground">
-                      {project.description}
-                    </p>
-                  )}
-                  <div className="mb-2">
-                    <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-                      <span>{counts.done}/{counts.total} tasks</span>
-                      <span>{progress}%</span>
-                    </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-green-500 transition-all"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+        <>
+          {ownedProjects.length > 0 && (
+            <div className="mb-8">
+              <h2 className="mb-3 text-lg font-semibold">My Projects</h2>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {ownedProjects.map((project) => {
+                  const counts = getTaskCounts(project._id);
+                  const progress = counts.total > 0 ? Math.round((counts.done / counts.total) * 100) : 0;
+                  return (
+                    <Card
+                      key={project._id}
+                      className="cursor-pointer transition-all hover:bg-muted/50 hover:shadow-md"
+                      onClick={() => router.push(`/projects/${project._id}`)}
+                    >
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start justify-between">
+                          <CardTitle className="text-lg">{project.name}</CardTitle>
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Badge
+                              variant="secondary"
+                              className={
+                                project.status === "active"
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                  : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                              }
+                            >
+                              {project.status}
+                            </Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                updateProject({
+                                  id: project._id,
+                                  status: project.status === "active" ? "archived" : "active",
+                                })
+                              }
+                            >
+                              {project.status === "active" ? "📦" : "♻️"}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteProject({ id: project._id })}
+                            >
+                              🗑️
+                            </Button>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        {project.description && (
+                          <p className="mb-3 text-sm text-muted-foreground">
+                            {project.description}
+                          </p>
+                        )}
+                        <div className="mb-2">
+                          <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                            <span>{counts.done}/{counts.total} tasks</span>
+                            <span>{progress}%</span>
+                          </div>
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full rounded-full bg-green-500 transition-all"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {sharedProjects.length > 0 && (
+            <div>
+              <h2 className="mb-3 text-lg font-semibold">Shared with Me</h2>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {sharedProjects.map((project) => {
+                  const counts = getTaskCounts(project._id);
+                  const progress = counts.total > 0 ? Math.round((counts.done / counts.total) * 100) : 0;
+                  return (
+                    <Card
+                      key={project._id}
+                      className="cursor-pointer transition-all hover:bg-muted/50 hover:shadow-md"
+                      onClick={() => router.push(`/projects/${project._id}`)}
+                    >
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start justify-between">
+                          <CardTitle className="text-lg">{project.name}</CardTitle>
+                          <Badge variant="secondary">Shared</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        {project.description && (
+                          <p className="mb-2 text-sm text-muted-foreground">
+                            {project.description}
+                          </p>
+                        )}
+                        <p className="mb-2 text-xs text-muted-foreground">
+                          Owned by {project.ownerName}
+                        </p>
+                        <div className="mb-2">
+                          <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                            <span>{counts.done}/{counts.total} tasks</span>
+                            <span>{progress}%</span>
+                          </div>
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full rounded-full bg-green-500 transition-all"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

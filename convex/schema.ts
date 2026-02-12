@@ -9,7 +9,8 @@ export default defineSchema({
     imageUrl: v.optional(v.string()),
     role: v.union(v.literal("admin"), v.literal("member")),
     createdAt: v.number(),
-  }).index("by_clerk_id", ["clerkId"]),
+  }).index("by_clerk_id", ["clerkId"])
+    .index("by_email", ["email"]),
 
   projects: defineTable({
     name: v.string(),
@@ -18,6 +19,28 @@ export default defineSchema({
     ownerId: v.id("users"),
     createdAt: v.number(),
   }).index("by_owner", ["ownerId"]),
+
+  projectMembers: defineTable({
+    projectId: v.id("projects"),
+    userId: v.id("users"),
+    role: v.union(v.literal("owner"), v.literal("editor"), v.literal("viewer")),
+    addedAt: v.number(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_user", ["userId"])
+    .index("by_project_user", ["projectId", "userId"]),
+
+  invitations: defineTable({
+    email: v.string(),
+    projectId: v.id("projects"),
+    role: v.union(v.literal("editor"), v.literal("viewer")),
+    invitedBy: v.id("users"),
+    status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("declined")),
+    createdAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_project", ["projectId"])
+    .index("by_email_status", ["email", "status"]),
 
   tasks: defineTable({
     title: v.string(),
@@ -48,6 +71,7 @@ export default defineSchema({
       v.literal("task_completed"),
       v.literal("project_archived"),
       v.literal("note_added"),
+      v.literal("invitation"),
       v.literal("system")
     ),
     title: v.string(),

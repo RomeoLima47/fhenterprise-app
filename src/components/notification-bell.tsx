@@ -12,6 +12,7 @@ const typeIcons = {
   task_overdue: "⏰",
   project_archived: "📦",
   note_added: "💬",
+  invitation: "📬",
   system: "🔔",
 };
 
