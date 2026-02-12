@@ -18,6 +18,7 @@ export function Sidebar() {
     { label: "Dashboard", href: "/dashboard", icon: "📊" },
     { label: "Tasks", href: "/tasks", icon: "✅", badge: todoCount > 0 ? todoCount : undefined },
     { label: "Projects", href: "/projects", icon: "📁" },
+    { label: "Calendar", href: "/calendar", icon: "📅" },
     { label: "Settings", href: "/settings", icon: "⚙️" },
   ];
 
