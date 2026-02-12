@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
@@ -13,9 +14,27 @@ export function Sidebar() {
   const pathname = usePathname();
   const tasks = useQuery(api.tasks.list);
   const pendingInvites = useQuery(api.invitations.listMyPending);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const todoCount = tasks?.filter((t) => t.status !== "done").length ?? 0;
   const inviteCount = pendingInvites?.length ?? 0;
+
+  // Close mobile menu on navigation
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
 
   const navItems = [
     { label: "Dashboard", href: "/dashboard", icon: "📊" },
@@ -27,8 +46,8 @@ export function Sidebar() {
     { label: "Settings", href: "/settings", icon: "⚙️" },
   ];
 
-  return (
-    <aside className="flex h-screen w-64 flex-col border-r bg-card">
+  const sidebarContent = (
+    <>
       <div className="flex items-center justify-between border-b px-6 py-4">
         <span className="text-xl font-bold">FH Enterprise</span>
         <NotificationBell />
@@ -70,6 +89,90 @@ export function Sidebar() {
         <UserButton afterSignOutUrl="/sign-in" />
         <ThemeToggle />
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile header bar */}
+      <div className="fixed left-0 right-0 top-0 z-40 flex h-14 items-center justify-between border-b bg-card px-4 lg:hidden">
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M3 5H17M3 10H17M3 15H17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
+        <span className="text-sm font-bold">FH Enterprise</span>
+        <NotificationBell />
+      </div>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Mobile slide-out sidebar */}
+      <aside
+        className={cn(
+          "fixed left-0 top-0 z-50 flex h-screen w-64 flex-col border-r bg-card transition-transform duration-200 lg:hidden",
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <span className="text-xl font-bold">FH Enterprise</span>
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            ✕
+          </button>
+        </div>
+        <nav className="flex-1 space-y-1 px-3 py-4">
+          {navItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                pathname.startsWith(item.href)
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <span className="flex items-center gap-3">
+                <span>{item.icon}</span>
+                {item.label}
+              </span>
+              {item.badge !== undefined && (
+                <span
+                  className={cn(
+                    "flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium",
+                    pathname.startsWith(item.href)
+                      ? "bg-primary-foreground/20 text-primary-foreground"
+                      : "bg-muted-foreground/10 text-muted-foreground"
+                  )}
+                >
+                  {item.badge}
+                </span>
+              )}
+            </Link>
+          ))}
+        </nav>
+        <div className="flex items-center justify-between border-t px-3 py-3">
+          <UserButton afterSignOutUrl="/sign-in" />
+          <ThemeToggle />
+        </div>
+      </aside>
+
+      {/* Desktop sidebar */}
+      <aside className="hidden h-screen w-64 flex-col border-r bg-card lg:flex">
+        {sidebarContent}
+      </aside>
+    </>
   );
 }

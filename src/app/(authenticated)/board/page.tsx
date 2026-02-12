@@ -12,13 +12,11 @@ import { api } from "../../../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
@@ -127,10 +125,10 @@ export default function BoardPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Board</h1>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold sm:text-3xl">Board</h1>
         <select
-          className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm"
+          className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm sm:w-auto"
           value={filterProject}
           onChange={(e) => setFilterProject(e.target.value)}
         >
@@ -152,16 +150,8 @@ export default function BoardPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-4">
-            <Input
-              placeholder="Task title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-            <Input
-              placeholder="Description (optional)"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
+            <Input placeholder="Task title" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <Input placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
             <select
               className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
               value={priority}
@@ -184,30 +174,22 @@ export default function BoardPage() {
               ))}
             </select>
             <div>
-              <label className="mb-1 block text-sm text-muted-foreground">
-                Due date (optional)
-              </label>
-              <Input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
+              <label className="mb-1 block text-sm text-muted-foreground">Due date (optional)</label>
+              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
-            <Button onClick={handleCreate} className="w-full">
-              Create
-            </Button>
+            <Button onClick={handleCreate} className="w-full">Create</Button>
           </div>
         </DialogContent>
       </Dialog>
 
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="grid flex-1 grid-cols-3 gap-4">
+        <div className="flex flex-1 gap-4 overflow-x-auto pb-4">
           {columns.map((column) => {
             const columnTasks = getColumnTasks(column.id);
             return (
               <div
                 key={column.id}
-                className={`flex flex-col rounded-lg border-t-4 ${column.color} ${column.bg} p-3`}
+                className={`flex min-w-[280px] flex-1 flex-col rounded-lg border-t-4 ${column.color} ${column.bg} p-3`}
               >
                 <div className="mb-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -244,11 +226,7 @@ export default function BoardPage() {
                           task.dueDate < Date.now();
 
                         return (
-                          <Draggable
-                            key={task._id}
-                            draggableId={task._id}
-                            index={index}
-                          >
+                          <Draggable key={task._id} draggableId={task._id} index={index}>
                             {(provided, snapshot) => (
                               <div
                                 ref={provided.innerRef}
@@ -261,9 +239,7 @@ export default function BoardPage() {
                                 <div className="mb-2 flex items-start justify-between">
                                   <p
                                     className={`text-sm font-medium ${
-                                      task.status === "done"
-                                        ? "text-muted-foreground line-through"
-                                        : ""
+                                      task.status === "done" ? "text-muted-foreground line-through" : ""
                                     }`}
                                   >
                                     {task.title}
@@ -275,13 +251,11 @@ export default function BoardPage() {
                                     ×
                                   </button>
                                 </div>
-
                                 {task.description && (
                                   <p className="mb-2 text-xs text-muted-foreground line-clamp-2">
                                     {task.description}
                                   </p>
                                 )}
-
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   <span
                                     className={`inline-block h-2 w-2 rounded-full ${priorityDots[task.priority]}`}
@@ -301,9 +275,7 @@ export default function BoardPage() {
                                   {task.dueDate && (
                                     <span
                                       className={`text-[10px] ${
-                                        overdue
-                                          ? "font-medium text-red-500"
-                                          : "text-muted-foreground"
+                                        overdue ? "font-medium text-red-500" : "text-muted-foreground"
                                       }`}
                                     >
                                       📅 {formatDate(task.dueDate)}

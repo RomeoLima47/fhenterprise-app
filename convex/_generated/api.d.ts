@@ -9,6 +9,7 @@
  */
 
 import type * as activity from "../activity.js";
+import type * as comments from "../comments.js";
 import type * as crons from "../crons.js";
 import type * as invitations from "../invitations.js";
 import type * as notes from "../notes.js";
@@ -27,6 +28,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   activity: typeof activity;
+  comments: typeof comments;
   crons: typeof crons;
   invitations: typeof invitations;
   notes: typeof notes;

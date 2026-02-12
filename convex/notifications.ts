@@ -8,7 +8,7 @@ export async function createNotification(
   ctx: MutationCtx,
   args: {
     userId: Id<"users">;
-    type: "task_overdue" | "task_completed" | "project_archived" | "note_added" | "invitation" | "system";
+    type: "task_overdue" | "task_completed" | "project_archived" | "note_added" | "invitation" | "comment" | "system";
     title: string;
     message: string;
     linkTo?: string;

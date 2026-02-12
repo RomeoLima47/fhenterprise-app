@@ -64,14 +64,14 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <h1 className="mb-2 text-3xl font-bold">
+      <h1 className="mb-2 text-2xl font-bold sm:text-3xl">
         Welcome back{user?.firstName ? `, ${user.firstName}` : ""}
       </h1>
-      <p className="mb-6 text-muted-foreground">
+      <p className="mb-6 text-sm text-muted-foreground sm:text-base">
         Here&apos;s an overview of your operations.
       </p>
 
-      <div className="mb-8 grid gap-4 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8 sm:gap-4 md:grid-cols-4">
         {[
           { label: "Total Tasks", value: taskCounts.total, color: "text-foreground" },
           { label: "To Do", value: taskCounts.todo, color: "text-blue-500" },
@@ -79,44 +79,44 @@ export default function DashboardPage() {
           { label: "Done", value: taskCounts.done, color: "text-green-500" },
         ].map((stat) => (
           <Card key={stat.label} className="transition-shadow hover:shadow-md">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardHeader className="pb-1 sm:pb-2">
+              <CardTitle className="text-xs font-medium text-muted-foreground sm:text-sm">
                 {stat.label}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
+              <p className={`text-2xl font-bold sm:text-3xl ${stat.color}`}>{stat.value}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className="mb-8 grid gap-4 md:grid-cols-2">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8 sm:gap-4">
         <Card className="transition-shadow hover:shadow-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardHeader className="pb-1 sm:pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground sm:text-sm">
               Total Projects
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">{projectCounts.total}</p>
+            <p className="text-2xl font-bold sm:text-3xl">{projectCounts.total}</p>
           </CardContent>
         </Card>
         <Card className="transition-shadow hover:shadow-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardHeader className="pb-1 sm:pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground sm:text-sm">
               Active Projects
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-green-500">{projectCounts.active}</p>
+            <p className="text-2xl font-bold text-green-500 sm:text-3xl">{projectCounts.active}</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className="grid gap-6 sm:gap-8 lg:grid-cols-2">
         <div>
-          <h2 className="mb-3 text-lg font-semibold">Upcoming Deadlines</h2>
+          <h2 className="mb-3 text-base font-semibold sm:text-lg">Upcoming Deadlines</h2>
           <Card>
             <CardContent className="pt-4">
               {deadlines === undefined ? (
@@ -150,18 +150,18 @@ export default function DashboardPage() {
                         key={task._id}
                         className="flex items-center justify-between border-b pb-3 last:border-0"
                       >
-                        <div>
-                          <p className="text-sm font-medium">{task.title}</p>
-                          <div className="flex items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{task.title}</p>
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className={`text-xs ${dateColor}`}>📅 {dateLabel}</span>
                             {task.projectName && (
-                              <span className="text-xs text-muted-foreground">
+                              <span className="hidden text-xs text-muted-foreground sm:inline">
                                 📁 {task.projectName}
                               </span>
                             )}
                           </div>
                         </div>
-                        <Badge variant="secondary" className={priorityColors[task.priority]}>
+                        <Badge variant="secondary" className={`ml-2 ${priorityColors[task.priority]}`}>
                           {task.priority}
                         </Badge>
                       </div>
@@ -174,7 +174,7 @@ export default function DashboardPage() {
         </div>
 
         <div>
-          <h2 className="mb-3 text-lg font-semibold">Recent Activity</h2>
+          <h2 className="mb-3 text-base font-semibold sm:text-lg">Recent Activity</h2>
           <Card>
             <CardContent className="pt-4">
               {activity === undefined ? (
@@ -194,7 +194,7 @@ export default function DashboardPage() {
                       className="cursor-pointer rounded-md border-b pb-3 last:border-0 hover:bg-muted/50"
                       onClick={() => router.push(`/projects/${item.projectId}`)}
                     >
-                      <p className="text-sm">{item.content}</p>
+                      <p className="truncate text-sm">{item.content}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {item.authorName} in{" "}
                         <span className="font-medium">{item.projectName}</span> ·{" "}

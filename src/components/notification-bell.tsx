@@ -13,6 +13,7 @@ const typeIcons = {
   project_archived: "📦",
   note_added: "💬",
   invitation: "📬",
+  comment: "🗨️",
   system: "🔔",
 };
 

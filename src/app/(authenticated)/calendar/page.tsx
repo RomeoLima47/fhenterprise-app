@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { useRouter } from "next/navigation";
 import { api } from "../../../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAYS_FULL = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAYS_SHORT = ["S", "M", "T", "W", "T", "F", "S"];
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -98,42 +98,40 @@ export default function CalendarPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Calendar</h1>
-        <Button variant="outline" onClick={goToToday}>
+      <div className="mb-4 flex items-center justify-between sm:mb-6">
+        <h1 className="text-2xl font-bold sm:text-3xl">Calendar</h1>
+        <Button variant="outline" size="sm" onClick={goToToday}>
           Today
         </Button>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-3">
+      <div className="grid gap-6 sm:gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <Card>
-            <CardContent className="pt-4">
+            <CardContent className="p-2 sm:p-4 sm:pt-4">
               <div className="mb-4 flex items-center justify-between">
-                <Button variant="ghost" onClick={prevMonth}>
+                <Button variant="ghost" size="sm" onClick={prevMonth}>
                   ←
                 </Button>
-                <h2 className="text-lg font-semibold">
+                <h2 className="text-sm font-semibold sm:text-lg">
                   {MONTHS[currentMonth]} {currentYear}
                 </h2>
-                <Button variant="ghost" onClick={nextMonth}>
+                <Button variant="ghost" size="sm" onClick={nextMonth}>
                   →
                 </Button>
               </div>
 
               <div className="grid grid-cols-7 gap-px">
-                {DAYS.map((day) => (
-                  <div
-                    key={day}
-                    className="py-2 text-center text-xs font-medium text-muted-foreground"
-                  >
-                    {day}
+                {DAYS_FULL.map((day, i) => (
+                  <div key={day} className="py-1 text-center text-xs font-medium text-muted-foreground sm:py-2">
+                    <span className="hidden sm:inline">{day}</span>
+                    <span className="sm:hidden">{DAYS_SHORT[i]}</span>
                   </div>
                 ))}
 
                 {calendarDays.map((day, i) => {
                   if (day === null) {
-                    return <div key={`empty-${i}`} className="min-h-[80px]" />;
+                    return <div key={`empty-${i}`} className="min-h-[40px] sm:min-h-[80px]" />;
                   }
 
                   const dayTasks = getTasksForDay(day);
@@ -146,7 +144,7 @@ export default function CalendarPage() {
                     <div
                       key={day}
                       onClick={() => setSelectedDate(date)}
-                      className={`min-h-[80px] cursor-pointer rounded-md border p-1 transition-colors ${
+                      className={`min-h-[40px] cursor-pointer rounded-md border p-0.5 transition-colors sm:min-h-[80px] sm:p-1 ${
                         isSelected
                           ? "border-primary bg-primary/5"
                           : isToday
@@ -156,7 +154,7 @@ export default function CalendarPage() {
                     >
                       <div className="flex items-center justify-between">
                         <span
-                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${
+                          className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] sm:h-6 sm:w-6 sm:text-xs ${
                             isToday
                               ? "bg-primary text-primary-foreground font-bold"
                               : "text-foreground"
@@ -165,15 +163,15 @@ export default function CalendarPage() {
                           {day}
                         </span>
                         {hasTasks && (
-                          <span className="text-xs text-muted-foreground">{dayTasks.length}</span>
+                          <span className="text-[10px] text-muted-foreground sm:text-xs">
+                            {dayTasks.length}
+                          </span>
                         )}
                       </div>
-                      <div className="mt-1 space-y-0.5">
+                      {/* Task previews - hidden on mobile, shown on desktop */}
+                      <div className="mt-0.5 hidden space-y-0.5 sm:block">
                         {dayTasks.slice(0, 3).map((task) => (
-                          <div
-                            key={task._id}
-                            className="flex items-center gap-1 truncate"
-                          >
+                          <div key={task._id} className="flex items-center gap-1 truncate">
                             <span
                               className={`inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full ${priorityDots[task.priority]}`}
                             />
@@ -194,6 +192,17 @@ export default function CalendarPage() {
                           </span>
                         )}
                       </div>
+                      {/* Mobile: just show dots */}
+                      {hasTasks && (
+                        <div className="mt-0.5 flex justify-center gap-0.5 sm:hidden">
+                          {dayTasks.slice(0, 3).map((task) => (
+                            <span
+                              key={task._id}
+                              className={`inline-block h-1 w-1 rounded-full ${priorityDots[task.priority]}`}
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -203,7 +212,7 @@ export default function CalendarPage() {
         </div>
 
         <div>
-          <h2 className="mb-3 text-lg font-semibold">
+          <h2 className="mb-3 text-base font-semibold sm:text-lg">
             {selectedDate
               ? selectedDate.toLocaleDateString("en-US", {
                   weekday: "long",
@@ -217,16 +226,12 @@ export default function CalendarPage() {
               {!selectedDate ? (
                 <div className="py-6 text-center">
                   <p className="mb-1 text-2xl">📅</p>
-                  <p className="text-sm text-muted-foreground">
-                    Click a date to see its tasks
-                  </p>
+                  <p className="text-sm text-muted-foreground">Click a date to see its tasks</p>
                 </div>
               ) : selectedTasks.length === 0 ? (
                 <div className="py-6 text-center">
                   <p className="mb-1 text-2xl">✨</p>
-                  <p className="text-sm text-muted-foreground">
-                    No tasks due on this date
-                  </p>
+                  <p className="text-sm text-muted-foreground">No tasks due on this date</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -242,39 +247,26 @@ export default function CalendarPage() {
                             onClick={() => cycleStatus(task._id, task.status)}
                             className="mt-0.5 text-base transition-transform hover:scale-110"
                           >
-                            {task.status === "done"
-                              ? "✅"
-                              : task.status === "in_progress"
-                                ? "🔄"
-                                : "⬜"}
+                            {task.status === "done" ? "✅" : task.status === "in_progress" ? "🔄" : "⬜"}
                           </button>
                           <div>
                             <p
                               className={`text-sm font-medium ${
-                                task.status === "done"
-                                  ? "text-muted-foreground line-through"
-                                  : ""
+                                task.status === "done" ? "text-muted-foreground line-through" : ""
                               }`}
                             >
                               {task.title}
                             </p>
                             {task.description && (
-                              <p className="text-xs text-muted-foreground">
-                                {task.description}
-                              </p>
+                              <p className="text-xs text-muted-foreground">{task.description}</p>
                             )}
                             {projectName && (
-                              <span className="text-xs text-muted-foreground">
-                                📁 {projectName}
-                              </span>
+                              <span className="text-xs text-muted-foreground">📁 {projectName}</span>
                             )}
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1">
-                          <Badge
-                            variant="secondary"
-                            className={`text-[10px] ${statusColors[task.status]}`}
-                          >
+                          <Badge variant="secondary" className={`text-[10px] ${statusColors[task.status]}`}>
                             {task.status.replace("_", " ")}
                           </Badge>
                           <span

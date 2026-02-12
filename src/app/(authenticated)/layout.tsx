@@ -10,8 +10,10 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto p-8">
-        <ErrorBoundary>{children}</ErrorBoundary>
+      <main className="flex-1 overflow-y-auto pt-14 lg:pt-0">
+        <div className="p-4 sm:p-6 lg:p-8">
+          <ErrorBoundary>{children}</ErrorBoundary>
+        </div>
       </main>
     </div>
   );

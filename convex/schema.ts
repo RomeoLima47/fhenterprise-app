@@ -57,6 +57,15 @@ export default defineSchema({
     .index("by_project", ["projectId"])
     .index("by_assignee", ["assigneeId"]),
 
+  comments: defineTable({
+    taskId: v.id("tasks"),
+    authorId: v.id("users"),
+    content: v.string(),
+    parentId: v.optional(v.id("comments")),
+    createdAt: v.number(),
+  })
+    .index("by_task", ["taskId"]),
+
   notes: defineTable({
     content: v.string(),
     projectId: v.id("projects"),
@@ -72,6 +81,7 @@ export default defineSchema({
       v.literal("project_archived"),
       v.literal("note_added"),
       v.literal("invitation"),
+      v.literal("comment"),
       v.literal("system")
     ),
     title: v.string(),

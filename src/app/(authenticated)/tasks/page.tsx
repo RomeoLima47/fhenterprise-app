@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { TasksPageSkeleton } from "@/components/skeletons";
+import { TaskComments } from "@/components/task-comments";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 const statusColors = {
@@ -29,34 +30,12 @@ const priorityColors = {
   high: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
 };
 
-type Task = {
-  _id: Id<"tasks">;
-  title: string;
-  description?: string;
-  status: "todo" | "in_progress" | "done";
-  priority: "low" | "medium" | "high";
-  dueDate?: number;
-  projectId?: Id<"projects">;
-  createdAt: number;
-};
-
 function formatDate(timestamp: number) {
   return new Date(timestamp).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
-}
-
-function isOverdue(dueDate?: number) {
-  if (!dueDate) return false;
-  return dueDate < Date.now();
-}
-
-function toDateInputValue(timestamp?: number) {
-  if (!timestamp) return "";
-  const date = new Date(timestamp);
-  return date.toISOString().split("T")[0];
 }
 
 export default function TasksPage() {
@@ -74,7 +53,7 @@ export default function TasksPage() {
   const [projectId, setProjectId] = useState<string>("");
   const [dueDate, setDueDate] = useState<string>("");
 
-  const [editTask, setEditTask] = useState<Task | null>(null);
+  const [editTask, setEditTask] = useState<any | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editStatus, setEditStatus] = useState<"todo" | "in_progress" | "done">("todo");
@@ -82,10 +61,9 @@ export default function TasksPage() {
   const [editProjectId, setEditProjectId] = useState<string>("");
   const [editDueDate, setEditDueDate] = useState<string>("");
 
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [filterPriority, setFilterPriority] = useState<string>("all");
-  const [filterProject, setFilterProject] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterPriority, setFilterPriority] = useState("all");
+  const [search, setSearch] = useState("");
 
   if (tasks === undefined || projects === undefined) {
     return <TasksPageSkeleton />;
@@ -110,14 +88,14 @@ export default function TasksPage() {
     setCreateOpen(false);
   };
 
-  const openEdit = (task: Task) => {
+  const openEdit = (task: any) => {
     setEditTask(task);
     setEditTitle(task.title);
     setEditDescription(task.description || "");
     setEditStatus(task.status);
     setEditPriority(task.priority);
     setEditProjectId(task.projectId || "");
-    setEditDueDate(toDateInputValue(task.dueDate));
+    setEditDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : "");
   };
 
   const handleEdit = async () => {
@@ -134,42 +112,25 @@ export default function TasksPage() {
     setEditTask(null);
   };
 
-  const cycleStatus = async (id: Id<"tasks">, current: string) => {
-    const next = current === "todo" ? "in_progress" : current === "in_progress" ? "done" : "todo";
-    await updateTask({ id, status: next as "todo" | "in_progress" | "done" });
-  };
-
   const getProjectName = (pid?: Id<"projects">) => {
-    if (!pid || !projects) return null;
+    if (!pid) return null;
     return projects.find((p) => p._id === pid)?.name ?? null;
   };
 
   const filteredTasks = tasks.filter((task) => {
     if (filterStatus !== "all" && task.status !== filterStatus) return false;
     if (filterPriority !== "all" && task.priority !== filterPriority) return false;
-    if (filterProject !== "all") {
-      if (filterProject === "none" && task.projectId) return false;
-      if (filterProject !== "none" && task.projectId !== filterProject) return false;
-    }
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      const matchesTitle = task.title.toLowerCase().includes(query);
-      const matchesDesc = task.description?.toLowerCase().includes(query);
-      if (!matchesTitle && !matchesDesc) return false;
-    }
+    if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
-  const hasActiveFilters =
-    filterStatus !== "all" || filterPriority !== "all" || filterProject !== "all" || searchQuery !== "";
-
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Tasks</h1>
+      <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold sm:text-3xl">Tasks</h1>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button>+ New Task</Button>
+            <Button className="w-full sm:w-auto">+ New Task</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -178,11 +139,11 @@ export default function TasksPage() {
             <div className="space-y-4 pt-4">
               <Input placeholder="Task title" value={title} onChange={(e) => setTitle(e.target.value)} />
               <Input placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <select
                   className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as "todo" | "in_progress" | "done")}
+                  onChange={(e) => setStatus(e.target.value as any)}
                 >
                   <option value="todo">To Do</option>
                   <option value="in_progress">In Progress</option>
@@ -191,7 +152,7 @@ export default function TasksPage() {
                 <select
                   className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
                   value={priority}
-                  onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
+                  onChange={(e) => setPriority(e.target.value as any)}
                 >
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
@@ -205,9 +166,7 @@ export default function TasksPage() {
               >
                 <option value="">No project</option>
                 {projects.filter((p) => p.status === "active").map((project) => (
-                  <option key={project._id} value={project._id}>
-                    {project.name}
-                  </option>
+                  <option key={project._id} value={project._id}>{project.name}</option>
                 ))}
               </select>
               <div>
@@ -220,12 +179,12 @@ export default function TasksPage() {
         </Dialog>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-col gap-2 sm:mb-6 sm:flex-row">
         <Input
           placeholder="Search tasks..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-48"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="sm:max-w-xs"
         />
         <select
           className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm"
@@ -247,98 +206,17 @@ export default function TasksPage() {
           <option value="medium">Medium</option>
           <option value="low">Low</option>
         </select>
-        <select
-          className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm"
-          value={filterProject}
-          onChange={(e) => setFilterProject(e.target.value)}
-        >
-          <option value="all">All projects</option>
-          <option value="none">No project</option>
-          {projects.filter((p) => p.status === "active").map((project) => (
-            <option key={project._id} value={project._id}>
-              {project.name}
-            </option>
-          ))}
-        </select>
-        {hasActiveFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setFilterStatus("all");
-              setFilterPriority("all");
-              setFilterProject("all");
-              setSearchQuery("");
-            }}
-          >
-            Clear filters
-          </Button>
-        )}
       </div>
-
-      <Dialog open={!!editTask} onOpenChange={(open) => { if (!open) setEditTask(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Task</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <Input placeholder="Task title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
-            <Input placeholder="Description (optional)" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
-            <div className="flex gap-2">
-              <select
-                className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                value={editStatus}
-                onChange={(e) => setEditStatus(e.target.value as "todo" | "in_progress" | "done")}
-              >
-                <option value="todo">To Do</option>
-                <option value="in_progress">In Progress</option>
-                <option value="done">Done</option>
-              </select>
-              <select
-                className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                value={editPriority}
-                onChange={(e) => setEditPriority(e.target.value as "low" | "medium" | "high")}
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
-            </div>
-            <select
-              className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-              value={editProjectId}
-              onChange={(e) => setEditProjectId(e.target.value)}
-            >
-              <option value="">No project</option>
-              {projects.filter((p) => p.status === "active").map((project) => (
-                <option key={project._id} value={project._id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-            <div>
-              <label className="mb-1 block text-sm text-muted-foreground">Due date (optional)</label>
-              <Input type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
-            </div>
-            <Button onClick={handleEdit} className="w-full">Save Changes</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {filteredTasks.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            {hasActiveFilters ? (
-              <>
-                <p className="mb-1 text-2xl">🔍</p>
-                <p className="text-muted-foreground">No tasks match your filters.</p>
-              </>
-            ) : (
-              <>
-                <p className="mb-1 text-2xl">✅</p>
-                <p className="mb-2 text-muted-foreground">No tasks yet.</p>
-                <Button onClick={() => setCreateOpen(true)}>Create your first task</Button>
-              </>
+            <p className="mb-1 text-2xl">✅</p>
+            <p className="mb-2 text-muted-foreground">
+              {tasks.length === 0 ? "No tasks yet." : "No tasks match your filters."}
+            </p>
+            {tasks.length === 0 && (
+              <Button onClick={() => setCreateOpen(true)}>Create your first task</Button>
             )}
           </CardContent>
         </Card>
@@ -346,50 +224,59 @@ export default function TasksPage() {
         <div className="space-y-2">
           {filteredTasks.map((task) => {
             const projectName = getProjectName(task.projectId);
-            const overdue = task.status !== "done" && isOverdue(task.dueDate);
+            const overdue =
+              task.status !== "done" && task.dueDate && task.dueDate < Date.now();
+
             return (
               <Card
                 key={task._id}
-                className="cursor-pointer transition-all hover:bg-muted/50 hover:shadow-sm"
-                onClick={() => openEdit(task as Task)}
+                className="cursor-pointer transition-all hover:bg-muted/50 hover:shadow-md"
+                onClick={() => openEdit(task)}
               >
-                <CardContent className="flex items-center justify-between py-4">
-                  <div className="flex items-center gap-4">
+                <CardContent className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-4">
+                  <div className="flex items-start gap-3">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        cycleStatus(task._id, task.status);
+                        const next =
+                          task.status === "todo"
+                            ? "in_progress"
+                            : task.status === "in_progress"
+                              ? "done"
+                              : "todo";
+                        updateTask({ id: task._id, status: next });
                       }}
-                      className="text-lg transition-transform hover:scale-110"
-                      title="Click to cycle status"
+                      className="mt-0.5 text-base transition-transform hover:scale-110"
                     >
                       {task.status === "done" ? "✅" : task.status === "in_progress" ? "🔄" : "⬜"}
                     </button>
-                    <div>
-                      <p className={`font-medium ${task.status === "done" ? "line-through text-muted-foreground" : ""}`}>
+                    <div className="min-w-0">
+                      <p
+                        className={`text-sm font-medium ${
+                          task.status === "done" ? "text-muted-foreground line-through" : ""
+                        }`}
+                      >
                         {task.title}
                       </p>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         {task.description && (
-                          <p className="text-sm text-muted-foreground">{task.description}</p>
+                          <span className="hidden truncate sm:inline">{task.description}</span>
                         )}
-                        {projectName && (
-                          <span className="text-xs text-muted-foreground">📁 {projectName}</span>
-                        )}
+                        {projectName && <span>📁 {projectName}</span>}
                         {task.dueDate && (
-                          <span className={`text-xs ${overdue ? "font-medium text-red-500" : "text-muted-foreground"}`}>
+                          <span className={overdue ? "font-medium text-red-500" : ""}>
                             📅 {formatDate(task.dueDate)}
-                            {overdue && " (overdue)"}
                           </span>
                         )}
+                        <span>💬</span>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className={statusColors[task.status]}>
+                  <div className="flex items-center gap-2 pl-8 sm:pl-0">
+                    <Badge variant="secondary" className={`text-xs ${statusColors[task.status]}`}>
                       {task.status.replace("_", " ")}
                     </Badge>
-                    <Badge variant="secondary" className={priorityColors[task.priority]}>
+                    <Badge variant="secondary" className={`text-xs ${priorityColors[task.priority]}`}>
                       {task.priority}
                     </Badge>
                     <Button
@@ -409,6 +296,76 @@ export default function TasksPage() {
           })}
         </div>
       )}
+
+      {/* Edit / Detail Dialog with Comments */}
+      <Dialog open={!!editTask} onOpenChange={(open) => !open && setEditTask(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Task Details</DialogTitle>
+          </DialogHeader>
+          {editTask && (
+            <div className="space-y-6 pt-4">
+              <div className="space-y-4">
+                <Input
+                  placeholder="Task title"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                />
+                <Input
+                  placeholder="Description (optional)"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as any)}
+                  >
+                    <option value="todo">To Do</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="done">Done</option>
+                  </select>
+                  <select
+                    className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    value={editPriority}
+                    onChange={(e) => setEditPriority(e.target.value as any)}
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+                <select
+                  className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  value={editProjectId}
+                  onChange={(e) => setEditProjectId(e.target.value)}
+                >
+                  <option value="">No project</option>
+                  {projects.filter((p) => p.status === "active").map((project) => (
+                    <option key={project._id} value={project._id}>{project.name}</option>
+                  ))}
+                </select>
+                <div>
+                  <label className="mb-1 block text-sm text-muted-foreground">Due date</label>
+                  <Input
+                    type="date"
+                    value={editDueDate}
+                    onChange={(e) => setEditDueDate(e.target.value)}
+                  />
+                </div>
+                <Button onClick={handleEdit} className="w-full">
+                  Save Changes
+                </Button>
+              </div>
+
+              <div className="border-t pt-4">
+                <TaskComments taskId={editTask._id} />
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
