@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -119,15 +119,15 @@ export function TaskComments({ taskId }: { taskId: Id<"tasks"> }) {
   return (
     <div>
       <h3 className="mb-3 text-sm font-semibold">
-        Comments {comments && comments.length > 0 && `(${comments.reduce((acc, c) => acc + 1 + c.replies.length, 0)})`}
+        Comments {comments && comments.length > 0 && `(${comments.reduce((acc: number, c: CommentData) => acc + 1 + c.replies.length, 0)})`}
       </h3>
 
       <div className="mb-4 flex gap-2">
         <Input
           placeholder="Add a comment..."
           value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onKeyDown={(e) => {
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setContent(e.target.value)}
+          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               handleSubmit();
@@ -159,35 +159,33 @@ export function TaskComments({ taskId }: { taskId: Id<"tasks"> }) {
             <div key={comment._id}>
               <CommentItem
                 comment={comment}
-                onReply={(parentId) => {
+                onReply={(parentId: Id<"comments">) => {
                   setReplyTo(replyTo === parentId ? null : parentId);
                   setReplyContent("");
                 }}
-                onDelete={(id) => deleteComment({ id })}
+                onDelete={(id: Id<"comments">) => deleteComment({ id })}
               />
 
-              {/* Replies */}
               {comment.replies.length > 0 && (
                 <div className="mt-2 space-y-2">
                   {comment.replies.map((reply) => (
                     <CommentItem
                       key={reply._id}
                       comment={reply}
-                      onDelete={(id) => deleteComment({ id })}
+                      onDelete={(id: Id<"comments">) => deleteComment({ id })}
                       isReply
                     />
                   ))}
                 </div>
               )}
 
-              {/* Reply input */}
               {replyTo === comment._id && (
                 <div className="ml-8 mt-2 flex gap-2">
                   <Input
                     placeholder={`Reply to ${comment.authorName}...`}
                     value={replyContent}
-                    onChange={(e) => setReplyContent(e.target.value)}
-                    onKeyDown={(e) => {
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReplyContent(e.target.value)}
+                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
                         handleReply();

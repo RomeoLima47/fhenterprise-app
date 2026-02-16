@@ -20,6 +20,7 @@ import type * as overdueChecker from "../overdueChecker.js";
 import type * as projectMembers from "../projectMembers.js";
 import type * as projects from "../projects.js";
 import type * as tasks from "../tasks.js";
+import type * as team from "../team.js";
 import type * as users from "../users.js";
 
 import type {
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   projectMembers: typeof projectMembers;
   projects: typeof projects;
   tasks: typeof tasks;
+  team: typeof team;
   users: typeof users;
 }>;
 

@@ -2,6 +2,7 @@
 
 import { Sidebar } from "@/components/sidebar";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { CommandPalette } from "@/components/command-palette";
 import { useStoreUser } from "@/hooks/use-store-user";
 
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
@@ -15,6 +16,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
           <ErrorBoundary>{children}</ErrorBoundary>
         </div>
       </main>
+      <CommandPalette />
     </div>
   );
 }

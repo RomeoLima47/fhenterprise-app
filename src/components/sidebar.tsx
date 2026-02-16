@@ -19,19 +19,11 @@ export function Sidebar() {
   const todoCount = tasks?.filter((t) => t.status !== "done").length ?? 0;
   const inviteCount = pendingInvites?.length ?? 0;
 
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
 
   useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
   }, [mobileOpen]);
 
   const navItems = [
@@ -45,8 +37,25 @@ export function Sidebar() {
     { label: "Settings", href: "/settings", icon: "⚙️" },
   ];
 
+  const openSearch = () => {
+    setMobileOpen(false);
+    setTimeout(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, ctrlKey: true, bubbles: true }));
+    }, 100);
+  };
+
+  const searchBtn = (
+    <button
+      onClick={openSearch}
+      className="mx-3 mb-1 flex items-center justify-between rounded-md border bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+    >
+      <span className="flex items-center gap-2">🔍 Search...</span>
+      <kbd className="hidden rounded border bg-background px-1 py-0.5 text-[10px] sm:inline">⌘K</kbd>
+    </button>
+  );
+
   const navList = (
-    <nav className="flex-1 space-y-1 px-3 py-4">
+    <nav className="flex-1 space-y-1 px-3 py-2">
       {navItems.map((item) => (
         <Link
           key={item.href}
@@ -63,14 +72,10 @@ export function Sidebar() {
             {item.label}
           </span>
           {item.badge !== undefined && (
-            <span
-              className={cn(
-                "flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium",
-                pathname.startsWith(item.href)
-                  ? "bg-primary-foreground/20 text-primary-foreground"
-                  : "bg-muted-foreground/10 text-muted-foreground"
-              )}
-            >
+            <span className={cn(
+              "flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium",
+              pathname.startsWith(item.href) ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted-foreground/10 text-muted-foreground"
+            )}>
               {item.badge}
             </span>
           )}
@@ -88,12 +93,8 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile header */}
       <div className="fixed left-0 right-0 top-0 z-40 flex h-14 items-center justify-between border-b bg-card px-4 lg:hidden">
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
+        <button onClick={() => setMobileOpen(true)} className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
             <path d="M3 5H17M3 10H17M3 15H17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
@@ -102,37 +103,27 @@ export function Sidebar() {
         <NotificationBell />
       </div>
 
-      {/* Mobile overlay */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 lg:hidden" onClick={() => setMobileOpen(false)} />
-      )}
+      {mobileOpen && <div className="fixed inset-0 z-50 bg-black/50 lg:hidden" onClick={() => setMobileOpen(false)} />}
 
-      {/* Mobile slide-out */}
-      <aside
-        className={cn(
-          "fixed left-0 top-0 z-50 flex h-screen w-64 flex-col border-r bg-card transition-transform duration-200 lg:hidden",
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
+      <aside className={cn(
+        "fixed left-0 top-0 z-50 flex h-screen w-64 flex-col border-r bg-card transition-transform duration-200 lg:hidden",
+        mobileOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
         <div className="flex items-center justify-between border-b px-6 py-4">
           <span className="text-xl font-bold">FH Enterprise</span>
-          <button
-            onClick={() => setMobileOpen(false)}
-            className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            ✕
-          </button>
+          <button onClick={() => setMobileOpen(false)} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground">✕</button>
         </div>
+        {searchBtn}
         {navList}
         {footer}
       </aside>
 
-      {/* Desktop sidebar */}
       <aside className="hidden h-screen w-64 flex-col border-r bg-card lg:flex">
         <div className="flex items-center justify-between border-b px-6 py-4">
           <span className="text-xl font-bold">FH Enterprise</span>
           <NotificationBell />
         </div>
+        {searchBtn}
         {navList}
         {footer}
       </aside>

@@ -33,16 +33,13 @@ const priorityColors = {
 };
 
 function formatDate(timestamp: number) {
-  return new Date(timestamp).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return new Date(timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 export default function TasksPage() {
   const tasks = useQuery(api.tasks.list);
   const projects = useQuery(api.projects.list);
+  const teammates = useQuery(api.team.listTeammates);
   const createTask = useMutation(api.tasks.create);
   const updateTask = useMutation(api.tasks.update);
   const deleteTask = useMutation(api.tasks.remove);
@@ -54,6 +51,7 @@ export default function TasksPage() {
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
   const [projectId, setProjectId] = useState<string>("");
   const [dueDate, setDueDate] = useState<string>("");
+  const [assigneeId, setAssigneeId] = useState<string>("");
 
   const [editTask, setEditTask] = useState<any | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -62,9 +60,11 @@ export default function TasksPage() {
   const [editPriority, setEditPriority] = useState<"low" | "medium" | "high">("medium");
   const [editProjectId, setEditProjectId] = useState<string>("");
   const [editDueDate, setEditDueDate] = useState<string>("");
+  const [editAssigneeId, setEditAssigneeId] = useState<string>("");
 
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
+  const [filterAssignee, setFilterAssignee] = useState("all");
   const [search, setSearch] = useState("");
 
   if (tasks === undefined || projects === undefined) {
@@ -80,14 +80,10 @@ export default function TasksPage() {
       priority,
       projectId: projectId ? (projectId as Id<"projects">) : undefined,
       dueDate: dueDate ? new Date(dueDate).getTime() : undefined,
+      assigneeId: assigneeId ? (assigneeId as Id<"users">) : undefined,
     });
-    setTitle("");
-    setDescription("");
-    setStatus("todo");
-    setPriority("medium");
-    setProjectId("");
-    setDueDate("");
-    setCreateOpen(false);
+    setTitle(""); setDescription(""); setStatus("todo"); setPriority("medium");
+    setProjectId(""); setDueDate(""); setAssigneeId(""); setCreateOpen(false);
   };
 
   const openEdit = (task: any) => {
@@ -98,6 +94,7 @@ export default function TasksPage() {
     setEditPriority(task.priority);
     setEditProjectId(task.projectId || "");
     setEditDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : "");
+    setEditAssigneeId(task.assigneeId || "");
   };
 
   const handleEdit = async () => {
@@ -110,6 +107,7 @@ export default function TasksPage() {
       priority: editPriority,
       projectId: editProjectId ? (editProjectId as Id<"projects">) : undefined,
       dueDate: editDueDate ? new Date(editDueDate).getTime() : undefined,
+      assigneeId: editAssigneeId ? (editAssigneeId as Id<"users">) : undefined,
     });
     setEditTask(null);
   };
@@ -122,9 +120,25 @@ export default function TasksPage() {
   const filteredTasks = tasks.filter((task) => {
     if (filterStatus !== "all" && task.status !== filterStatus) return false;
     if (filterPriority !== "all" && task.priority !== filterPriority) return false;
+    if (filterAssignee === "assigned" && !task.assigneeId) return false;
+    if (filterAssignee === "unassigned" && task.assigneeId) return false;
+    if (filterAssignee !== "all" && filterAssignee !== "assigned" && filterAssignee !== "unassigned" && task.assigneeId !== filterAssignee) return false;
     if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  const assigneeSelect = (value: string, onChange: (v: string) => void) => (
+    <select
+      className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="">Unassigned</option>
+      {(teammates ?? []).map((t) => (
+        <option key={t._id} value={t._id}>{t.name}</option>
+      ))}
+    </select>
+  );
 
   return (
     <div>
@@ -135,9 +149,7 @@ export default function TasksPage() {
             <Button className="w-full sm:w-auto">+ New Task</Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create Task</DialogTitle>
-            </DialogHeader>
+            <DialogHeader><DialogTitle>Create Task</DialogTitle></DialogHeader>
             <div className="space-y-4 pt-4">
               <Input placeholder="Task title" value={title} onChange={(e) => setTitle(e.target.value)} />
               <Input placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
@@ -155,12 +167,16 @@ export default function TasksPage() {
               </div>
               <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
                 <option value="">No project</option>
-                {projects.filter((p) => p.status === "active").map((project) => (
-                  <option key={project._id} value={project._id}>{project.name}</option>
+                {projects.filter((p) => p.status === "active").map((p) => (
+                  <option key={p._id} value={p._id}>{p.name}</option>
                 ))}
               </select>
               <div>
-                <label className="mb-1 block text-sm text-muted-foreground">Due date (optional)</label>
+                <label className="mb-1 block text-xs text-muted-foreground">Assign to</label>
+                {assigneeSelect(assigneeId, setAssigneeId)}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Due date (optional)</label>
                 <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
               </div>
               <Button onClick={handleCreate} className="w-full">Create</Button>
@@ -169,7 +185,7 @@ export default function TasksPage() {
         </Dialog>
       </div>
 
-      <div className="mb-4 flex flex-col gap-2 sm:mb-6 sm:flex-row">
+      <div className="mb-4 flex flex-col gap-2 sm:mb-6 sm:flex-row sm:flex-wrap">
         <Input placeholder="Search tasks..." value={search} onChange={(e) => setSearch(e.target.value)} className="sm:max-w-xs" />
         <select className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
           <option value="all">All statuses</option>
@@ -183,6 +199,14 @@ export default function TasksPage() {
           <option value="medium">Medium</option>
           <option value="low">Low</option>
         </select>
+        <select className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm" value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)}>
+          <option value="all">All assignees</option>
+          <option value="assigned">Assigned</option>
+          <option value="unassigned">Unassigned</option>
+          {(teammates ?? []).map((t) => (
+            <option key={t._id} value={t._id}>{t.name}</option>
+          ))}
+        </select>
       </div>
 
       {filteredTasks.length === 0 ? (
@@ -192,9 +216,7 @@ export default function TasksPage() {
             <p className="mb-2 text-muted-foreground">
               {tasks.length === 0 ? "No tasks yet." : "No tasks match your filters."}
             </p>
-            {tasks.length === 0 && (
-              <Button onClick={() => setCreateOpen(true)}>Create your first task</Button>
-            )}
+            {tasks.length === 0 && <Button onClick={() => setCreateOpen(true)}>Create your first task</Button>}
           </CardContent>
         </Card>
       ) : (
@@ -204,11 +226,7 @@ export default function TasksPage() {
             const overdue = task.status !== "done" && task.dueDate && task.dueDate < Date.now();
 
             return (
-              <Card
-                key={task._id}
-                className="cursor-pointer transition-all hover:bg-muted/50 hover:shadow-md"
-                onClick={() => openEdit(task)}
-              >
+              <Card key={task._id} className="cursor-pointer transition-all hover:bg-muted/50 hover:shadow-md" onClick={() => openEdit(task)}>
                 <CardContent className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-4">
                   <div className="flex items-start gap-3">
                     <button
@@ -226,15 +244,13 @@ export default function TasksPage() {
                         {task.title}
                       </p>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        {task.description && <span className="hidden truncate sm:inline">{task.description}</span>}
                         {projectName && <span>📁 {projectName}</span>}
                         {task.dueDate && (
-                          <span className={overdue ? "font-medium text-red-500" : ""}>
-                            📅 {formatDate(task.dueDate)}
-                          </span>
+                          <span className={overdue ? "font-medium text-red-500" : ""}>📅 {formatDate(task.dueDate)}</span>
                         )}
-                        <span>💬</span>
-                        <span>📎</span>
+                        {task.assigneeName && (
+                          <span>👤 {task.assigneeName}</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -245,14 +261,7 @@ export default function TasksPage() {
                     <Badge variant="secondary" className={`text-xs ${priorityColors[task.priority]}`}>
                       {task.priority}
                     </Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteTask({ id: task._id });
-                      }}
-                    >
+                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); deleteTask({ id: task._id }); }}>
                       🗑️
                     </Button>
                   </div>
@@ -263,41 +272,40 @@ export default function TasksPage() {
         </div>
       )}
 
-      {/* Task Detail Dialog */}
       <Dialog open={!!editTask} onOpenChange={(open) => !open && setEditTask(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Task Details</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Task Details</DialogTitle></DialogHeader>
           {editTask && (
             <div className="space-y-4 pt-4">
-              <div className="space-y-4">
-                <Input placeholder="Task title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
-                <Input placeholder="Description (optional)" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
-                <div className="grid grid-cols-2 gap-2">
-                  <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={editStatus} onChange={(e) => setEditStatus(e.target.value as any)}>
-                    <option value="todo">To Do</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="done">Done</option>
-                  </select>
-                  <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={editPriority} onChange={(e) => setEditPriority(e.target.value as any)}>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
-                </div>
-                <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={editProjectId} onChange={(e) => setEditProjectId(e.target.value)}>
-                  <option value="">No project</option>
-                  {projects.filter((p) => p.status === "active").map((project) => (
-                    <option key={project._id} value={project._id}>{project.name}</option>
-                  ))}
+              <Input placeholder="Task title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+              <Input placeholder="Description (optional)" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+              <div className="grid grid-cols-2 gap-2">
+                <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={editStatus} onChange={(e) => setEditStatus(e.target.value as any)}>
+                  <option value="todo">To Do</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="done">Done</option>
                 </select>
-                <div>
-                  <label className="mb-1 block text-sm text-muted-foreground">Due date</label>
-                  <Input type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
-                </div>
-                <Button onClick={handleEdit} className="w-full">Save Changes</Button>
+                <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={editPriority} onChange={(e) => setEditPriority(e.target.value as any)}>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
               </div>
+              <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={editProjectId} onChange={(e) => setEditProjectId(e.target.value)}>
+                <option value="">No project</option>
+                {projects.filter((p) => p.status === "active").map((p) => (
+                  <option key={p._id} value={p._id}>{p.name}</option>
+                ))}
+              </select>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Assign to</label>
+                {assigneeSelect(editAssigneeId, setEditAssigneeId)}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Due date</label>
+                <Input type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
+              </div>
+              <Button onClick={handleEdit} className="w-full">Save Changes</Button>
 
               <Tabs defaultValue="comments" className="border-t pt-4">
                 <TabsList className="w-full">

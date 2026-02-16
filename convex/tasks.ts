@@ -8,14 +8,12 @@ export const list = query({
     const user = await getCurrentUser(ctx);
     if (!user) return [];
 
-    // Own tasks
     const ownTasks = await ctx.db
       .query("tasks")
       .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
       .order("desc")
       .collect();
 
-    // Tasks from shared projects (where user is a member)
     const memberships = await ctx.db
       .query("projectMembers")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
@@ -34,13 +32,17 @@ export const list = query({
       sharedTasks.push(...projectTasks);
     }
 
-    // Combine and deduplicate
     const allIds = new Set<string>();
-    const all = [];
+    const all: (typeof ownTasks[number] & { assigneeName?: string })[] = [];
     for (const t of [...ownTasks, ...sharedTasks]) {
       if (!allIds.has(t._id)) {
         allIds.add(t._id);
-        all.push(t);
+        let assigneeName: string | undefined;
+        if (t.assigneeId) {
+          const assignee = await ctx.db.get(t.assigneeId);
+          assigneeName = assignee?.name;
+        }
+        all.push({ ...t, assigneeName });
       }
     }
 
@@ -56,16 +58,28 @@ export const create = mutation({
     priority: v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
     dueDate: v.optional(v.number()),
     projectId: v.optional(v.id("projects")),
+    assigneeId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
 
-    await ctx.db.insert("tasks", {
+    const taskId = await ctx.db.insert("tasks", {
       ...args,
       ownerId: user._id,
       createdAt: Date.now(),
     });
+
+    // Notify assignee
+    if (args.assigneeId && args.assigneeId !== user._id) {
+      await createNotification(ctx, {
+        userId: args.assigneeId,
+        type: "system",
+        title: "Task assigned",
+        message: `${user.name} assigned you "${args.title}".`,
+        linkTo: "/tasks",
+      });
+    }
   },
 });
 
@@ -78,6 +92,7 @@ export const update = mutation({
     priority: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))),
     dueDate: v.optional(v.number()),
     projectId: v.optional(v.id("projects")),
+    assigneeId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
@@ -87,7 +102,6 @@ export const update = mutation({
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Task not found");
 
-    // Allow update if owner or member of the project
     let hasAccess = existing.ownerId === user._id;
     if (!hasAccess && existing.projectId) {
       const membership = await ctx.db
@@ -100,6 +114,7 @@ export const update = mutation({
     }
     if (!hasAccess) throw new Error("Not authorized");
 
+    // Notify on completion
     if (fields.status === "done" && existing.status !== "done") {
       let projectName = "";
       if (existing.projectId) {
@@ -111,6 +126,17 @@ export const update = mutation({
         type: "task_completed",
         title: "Task completed",
         message: `"${existing.title}"${projectName} has been marked as done.`,
+        linkTo: "/tasks",
+      });
+    }
+
+    // Notify on reassignment
+    if (fields.assigneeId && fields.assigneeId !== existing.assigneeId && fields.assigneeId !== user._id) {
+      await createNotification(ctx, {
+        userId: fields.assigneeId,
+        type: "system",
+        title: "Task assigned",
+        message: `${user.name} assigned you "${existing.title}".`,
         linkTo: "/tasks",
       });
     }
