@@ -7,7 +7,7 @@ import { api } from "../../../../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FileAttachments } from "@/components/file-attachments";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 const statusColors = {
@@ -31,20 +32,11 @@ const priorityColors = {
 };
 
 function formatDate(timestamp: number) {
-  return new Date(timestamp).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return new Date(timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function formatDateTime(timestamp: number) {
-  return new Date(timestamp).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return new Date(timestamp).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 export default function ProjectDetailPage() {
@@ -133,23 +125,16 @@ export default function ProjectDetailPage() {
   return (
     <div>
       <div className="mb-6">
-        <button
-          onClick={() => router.push("/projects")}
-          className="mb-2 text-sm text-muted-foreground hover:text-foreground"
-        >
+        <button onClick={() => router.push("/projects")} className="mb-2 text-sm text-muted-foreground hover:text-foreground">
           ← Back to Projects
         </button>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold">{project.name}</h1>
-              {!isOwner && (
-                <Badge variant="secondary" className="text-xs">Shared</Badge>
-              )}
+              <h1 className="text-2xl font-bold sm:text-3xl">{project.name}</h1>
+              {!isOwner && <Badge variant="secondary" className="text-xs">Shared</Badge>}
             </div>
-            {project.description && (
-              <p className="mt-1 text-muted-foreground">{project.description}</p>
-            )}
+            {project.description && <p className="mt-1 text-muted-foreground">{project.description}</p>}
             <p className="mt-1 text-sm text-muted-foreground">
               {doneTasks}/{totalTasks} tasks completed
               {!isOwner && ` · Owned by ${project.ownerName}`}
@@ -157,7 +142,7 @@ export default function ProjectDetailPage() {
           </div>
           <Dialog open={taskOpen} onOpenChange={setTaskOpen}>
             <DialogTrigger asChild>
-              <Button>+ Add Task</Button>
+              <Button className="w-full sm:w-auto">+ Add Task</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
@@ -166,11 +151,7 @@ export default function ProjectDetailPage() {
               <div className="space-y-4 pt-4">
                 <Input placeholder="Task title" value={title} onChange={(e) => setTitle(e.target.value)} />
                 <Input placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
-                <select
-                  className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
-                >
+                <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={priority} onChange={(e) => setPriority(e.target.value as any)}>
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
                   <option value="high">High</option>
@@ -186,7 +167,7 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-3">
+      <div className="grid gap-6 sm:gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <h2 className="mb-3 text-lg font-semibold">Tasks</h2>
           {!tasks ? (
@@ -201,41 +182,31 @@ export default function ProjectDetailPage() {
             <div className="space-y-2">
               {tasks.map((task) => (
                 <Card key={task._id} className="transition-colors hover:bg-muted/50">
-                  <CardContent className="flex items-center justify-between py-4">
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={() => cycleStatus(task._id, task.status)}
-                        className="text-lg"
-                        title="Click to cycle status"
-                      >
+                  <CardContent className="flex items-center justify-between py-3 sm:py-4">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <button onClick={() => cycleStatus(task._id, task.status)} className="text-lg" title="Click to cycle status">
                         {task.status === "done" ? "✅" : task.status === "in_progress" ? "🔄" : "⬜"}
                       </button>
-                      <div>
-                        <p className={`font-medium ${task.status === "done" ? "line-through text-muted-foreground" : ""}`}>
+                      <div className="min-w-0">
+                        <p className={`text-sm font-medium ${task.status === "done" ? "line-through text-muted-foreground" : ""}`}>
                           {task.title}
                         </p>
-                        <div className="flex items-center gap-2">
-                          {task.description && (
-                            <p className="text-sm text-muted-foreground">{task.description}</p>
-                          )}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {task.description && <p className="hidden text-sm text-muted-foreground sm:block">{task.description}</p>}
                           {task.dueDate && (
-                            <span className="text-xs text-muted-foreground">
-                              📅 {formatDate(task.dueDate)}
-                            </span>
+                            <span className="text-xs text-muted-foreground">📅 {formatDate(task.dueDate)}</span>
                           )}
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className={statusColors[task.status]}>
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <Badge variant="secondary" className={`hidden text-xs sm:inline-flex ${statusColors[task.status]}`}>
                         {task.status.replace("_", " ")}
                       </Badge>
-                      <Badge variant="secondary" className={priorityColors[task.priority]}>
+                      <Badge variant="secondary" className={`text-xs ${priorityColors[task.priority]}`}>
                         {task.priority}
                       </Badge>
-                      <Button variant="ghost" size="sm" onClick={() => deleteTask({ id: task._id })}>
-                        🗑️
-                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => deleteTask({ id: task._id })}>🗑️</Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -248,11 +219,10 @@ export default function ProjectDetailPage() {
           <Tabs defaultValue="activity">
             <TabsList className="mb-3 w-full">
               <TabsTrigger value="activity" className="flex-1">Activity</TabsTrigger>
+              <TabsTrigger value="files" className="flex-1">Files</TabsTrigger>
               <TabsTrigger value="team" className="flex-1">
                 Team
-                {(members?.length ?? 0) > 0 && (
-                  <span className="ml-1 text-xs">({members?.length})</span>
-                )}
+                {(members?.length ?? 0) > 0 && <span className="ml-1 text-xs">({members?.length})</span>}
               </TabsTrigger>
             </TabsList>
 
@@ -264,15 +234,10 @@ export default function ProjectDetailPage() {
                       placeholder="Add a note..."
                       value={noteContent}
                       onChange={(e) => setNoteContent(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleCreateNote();
-                      }}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleCreateNote(); }}
                     />
-                    <Button onClick={handleCreateNote} size="sm">
-                      Post
-                    </Button>
+                    <Button onClick={handleCreateNote} size="sm">Post</Button>
                   </div>
-
                   {!notes ? (
                     <p className="text-sm text-muted-foreground">Loading...</p>
                   ) : notes.length === 0 ? (
@@ -288,19 +253,20 @@ export default function ProjectDetailPage() {
                                 {note.authorName} · {formatDateTime(note.createdAt)}
                               </p>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={() => deleteNote({ id: note._id })}
-                            >
-                              ×
-                            </Button>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => deleteNote({ id: note._id })}>×</Button>
                           </div>
                         </div>
                       ))}
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="files">
+              <Card>
+                <CardContent className="pt-4">
+                  <FileAttachments projectId={projectId} />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -315,13 +281,8 @@ export default function ProjectDetailPage() {
                         <Input
                           placeholder="Email address"
                           value={inviteEmail}
-                          onChange={(e) => {
-                            setInviteEmail(e.target.value);
-                            setInviteError("");
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleInvite();
-                          }}
+                          onChange={(e) => { setInviteEmail(e.target.value); setInviteError(""); }}
+                          onKeyDown={(e) => { if (e.key === "Enter") handleInvite(); }}
                         />
                         <select
                           className="flex h-10 rounded-md border bg-background px-2 py-2 text-sm"
@@ -331,30 +292,19 @@ export default function ProjectDetailPage() {
                           <option value="editor">Editor</option>
                           <option value="viewer">Viewer</option>
                         </select>
-                        <Button onClick={handleInvite} size="sm">
-                          Invite
-                        </Button>
+                        <Button onClick={handleInvite} size="sm">Invite</Button>
                       </div>
-                      {inviteError && (
-                        <p className="mt-1 text-xs text-red-500">{inviteError}</p>
-                      )}
+                      {inviteError && <p className="mt-1 text-xs text-red-500">{inviteError}</p>}
                     </div>
                   )}
 
                   <div className="space-y-3">
-                    <p className="text-xs font-medium text-muted-foreground uppercase">Members</p>
+                    <p className="text-xs font-medium uppercase text-muted-foreground">Members</p>
                     {members?.map((member) => (
-                      <div
-                        key={member._id}
-                        className="flex items-center justify-between border-b pb-2 last:border-0"
-                      >
+                      <div key={member._id} className="flex items-center justify-between border-b pb-2 last:border-0">
                         <div className="flex items-center gap-2">
                           {member.imageUrl ? (
-                            <img
-                              src={member.imageUrl}
-                              alt=""
-                              className="h-7 w-7 rounded-full"
-                            />
+                            <img src={member.imageUrl} alt="" className="h-7 w-7 rounded-full" />
                           ) : (
                             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-medium">
                               {member.name.charAt(0)}
@@ -366,23 +316,9 @@ export default function ProjectDetailPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-[10px]">
-                            {member.role}
-                          </Badge>
+                          <Badge variant="secondary" className="text-[10px]">{member.role}</Badge>
                           {isOwner && member.role !== "owner" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={() =>
-                                removeMember({
-                                  projectId,
-                                  memberId: member._id,
-                                })
-                              }
-                            >
-                              ×
-                            </Button>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeMember({ projectId, memberId: member._id })}>×</Button>
                           )}
                         </div>
                       </div>
@@ -391,28 +327,14 @@ export default function ProjectDetailPage() {
 
                   {isOwner && pendingInvites.length > 0 && (
                     <div className="mt-4 space-y-3">
-                      <p className="text-xs font-medium text-muted-foreground uppercase">
-                        Pending Invitations
-                      </p>
+                      <p className="text-xs font-medium uppercase text-muted-foreground">Pending Invitations</p>
                       {pendingInvites.map((inv) => (
-                        <div
-                          key={inv._id}
-                          className="flex items-center justify-between border-b pb-2 last:border-0"
-                        >
+                        <div key={inv._id} className="flex items-center justify-between border-b pb-2 last:border-0">
                           <div>
                             <p className="text-sm">{inv.email}</p>
-                            <Badge variant="secondary" className="text-[10px]">
-                              {inv.role}
-                            </Badge>
+                            <Badge variant="secondary" className="text-[10px]">{inv.role}</Badge>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 text-xs"
-                            onClick={() => revokeInvite({ id: inv._id })}
-                          >
-                            Revoke
-                          </Button>
+                          <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => revokeInvite({ id: inv._id })}>Revoke</Button>
                         </div>
                       ))}
                     </div>

@@ -14,8 +14,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TasksPageSkeleton } from "@/components/skeletons";
 import { TaskComments } from "@/components/task-comments";
+import { FileAttachments } from "@/components/file-attachments";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 const statusColors = {
@@ -140,30 +142,18 @@ export default function TasksPage() {
               <Input placeholder="Task title" value={title} onChange={(e) => setTitle(e.target.value)} />
               <Input placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
               <div className="grid grid-cols-2 gap-2">
-                <select
-                  className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as any)}
-                >
+                <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={status} onChange={(e) => setStatus(e.target.value as any)}>
                   <option value="todo">To Do</option>
                   <option value="in_progress">In Progress</option>
                   <option value="done">Done</option>
                 </select>
-                <select
-                  className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value as any)}
-                >
+                <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={priority} onChange={(e) => setPriority(e.target.value as any)}>
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
                   <option value="high">High</option>
                 </select>
               </div>
-              <select
-                className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
-              >
+              <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
                 <option value="">No project</option>
                 {projects.filter((p) => p.status === "active").map((project) => (
                   <option key={project._id} value={project._id}>{project.name}</option>
@@ -180,27 +170,14 @@ export default function TasksPage() {
       </div>
 
       <div className="mb-4 flex flex-col gap-2 sm:mb-6 sm:flex-row">
-        <Input
-          placeholder="Search tasks..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="sm:max-w-xs"
-        />
-        <select
-          className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm"
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-        >
+        <Input placeholder="Search tasks..." value={search} onChange={(e) => setSearch(e.target.value)} className="sm:max-w-xs" />
+        <select className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
           <option value="all">All statuses</option>
           <option value="todo">To Do</option>
           <option value="in_progress">In Progress</option>
           <option value="done">Done</option>
         </select>
-        <select
-          className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm"
-          value={filterPriority}
-          onChange={(e) => setFilterPriority(e.target.value)}
-        >
+        <select className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm" value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
           <option value="all">All priorities</option>
           <option value="high">High</option>
           <option value="medium">Medium</option>
@@ -224,8 +201,7 @@ export default function TasksPage() {
         <div className="space-y-2">
           {filteredTasks.map((task) => {
             const projectName = getProjectName(task.projectId);
-            const overdue =
-              task.status !== "done" && task.dueDate && task.dueDate < Date.now();
+            const overdue = task.status !== "done" && task.dueDate && task.dueDate < Date.now();
 
             return (
               <Card
@@ -238,12 +214,7 @@ export default function TasksPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        const next =
-                          task.status === "todo"
-                            ? "in_progress"
-                            : task.status === "in_progress"
-                              ? "done"
-                              : "todo";
+                        const next = task.status === "todo" ? "in_progress" : task.status === "in_progress" ? "done" : "todo";
                         updateTask({ id: task._id, status: next });
                       }}
                       className="mt-0.5 text-base transition-transform hover:scale-110"
@@ -251,17 +222,11 @@ export default function TasksPage() {
                       {task.status === "done" ? "✅" : task.status === "in_progress" ? "🔄" : "⬜"}
                     </button>
                     <div className="min-w-0">
-                      <p
-                        className={`text-sm font-medium ${
-                          task.status === "done" ? "text-muted-foreground line-through" : ""
-                        }`}
-                      >
+                      <p className={`text-sm font-medium ${task.status === "done" ? "text-muted-foreground line-through" : ""}`}>
                         {task.title}
                       </p>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        {task.description && (
-                          <span className="hidden truncate sm:inline">{task.description}</span>
-                        )}
+                        {task.description && <span className="hidden truncate sm:inline">{task.description}</span>}
                         {projectName && <span>📁 {projectName}</span>}
                         {task.dueDate && (
                           <span className={overdue ? "font-medium text-red-500" : ""}>
@@ -269,6 +234,7 @@ export default function TasksPage() {
                           </span>
                         )}
                         <span>💬</span>
+                        <span>📎</span>
                       </div>
                     </div>
                   </div>
@@ -297,50 +263,30 @@ export default function TasksPage() {
         </div>
       )}
 
-      {/* Edit / Detail Dialog with Comments */}
+      {/* Task Detail Dialog */}
       <Dialog open={!!editTask} onOpenChange={(open) => !open && setEditTask(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Task Details</DialogTitle>
           </DialogHeader>
           {editTask && (
-            <div className="space-y-6 pt-4">
+            <div className="space-y-4 pt-4">
               <div className="space-y-4">
-                <Input
-                  placeholder="Task title"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                />
-                <Input
-                  placeholder="Description (optional)"
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                />
+                <Input placeholder="Task title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+                <Input placeholder="Description (optional)" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
                 <div className="grid grid-cols-2 gap-2">
-                  <select
-                    className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value as any)}
-                  >
+                  <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={editStatus} onChange={(e) => setEditStatus(e.target.value as any)}>
                     <option value="todo">To Do</option>
                     <option value="in_progress">In Progress</option>
                     <option value="done">Done</option>
                   </select>
-                  <select
-                    className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    value={editPriority}
-                    onChange={(e) => setEditPriority(e.target.value as any)}
-                  >
+                  <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={editPriority} onChange={(e) => setEditPriority(e.target.value as any)}>
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
                   </select>
                 </div>
-                <select
-                  className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                  value={editProjectId}
-                  onChange={(e) => setEditProjectId(e.target.value)}
-                >
+                <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={editProjectId} onChange={(e) => setEditProjectId(e.target.value)}>
                   <option value="">No project</option>
                   {projects.filter((p) => p.status === "active").map((project) => (
                     <option key={project._id} value={project._id}>{project.name}</option>
@@ -348,20 +294,23 @@ export default function TasksPage() {
                 </select>
                 <div>
                   <label className="mb-1 block text-sm text-muted-foreground">Due date</label>
-                  <Input
-                    type="date"
-                    value={editDueDate}
-                    onChange={(e) => setEditDueDate(e.target.value)}
-                  />
+                  <Input type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
                 </div>
-                <Button onClick={handleEdit} className="w-full">
-                  Save Changes
-                </Button>
+                <Button onClick={handleEdit} className="w-full">Save Changes</Button>
               </div>
 
-              <div className="border-t pt-4">
-                <TaskComments taskId={editTask._id} />
-              </div>
+              <Tabs defaultValue="comments" className="border-t pt-4">
+                <TabsList className="w-full">
+                  <TabsTrigger value="comments" className="flex-1">💬 Comments</TabsTrigger>
+                  <TabsTrigger value="files" className="flex-1">📎 Files</TabsTrigger>
+                </TabsList>
+                <TabsContent value="comments" className="pt-2">
+                  <TaskComments taskId={editTask._id} />
+                </TabsContent>
+                <TabsContent value="files" className="pt-2">
+                  <FileAttachments taskId={editTask._id} />
+                </TabsContent>
+              </Tabs>
             </div>
           )}
         </DialogContent>
