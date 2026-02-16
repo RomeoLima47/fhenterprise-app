@@ -19,12 +19,10 @@ export function Sidebar() {
   const todoCount = tasks?.filter((t) => t.status !== "done").length ?? 0;
   const inviteCount = pendingInvites?.length ?? 0;
 
-  // Close mobile menu on navigation
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
 
-  // Prevent body scroll when mobile menu is open
   useEffect(() => {
     if (mobileOpen) {
       document.body.style.overflow = "hidden";
@@ -42,59 +40,55 @@ export function Sidebar() {
     { label: "Board", href: "/board", icon: "📋" },
     { label: "Projects", href: "/projects", icon: "📁" },
     { label: "Calendar", href: "/calendar", icon: "📅" },
+    { label: "Analytics", href: "/analytics", icon: "📈" },
     { label: "Invitations", href: "/invitations", icon: "📬", badge: inviteCount > 0 ? inviteCount : undefined },
     { label: "Settings", href: "/settings", icon: "⚙️" },
   ];
 
-  const sidebarContent = (
-    <>
-      <div className="flex items-center justify-between border-b px-6 py-4">
-        <span className="text-xl font-bold">FH Enterprise</span>
-        <NotificationBell />
-      </div>
-
-      <nav className="flex-1 space-y-1 px-3 py-4">
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              pathname.startsWith(item.href)
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-          >
-            <span className="flex items-center gap-3">
-              <span>{item.icon}</span>
-              {item.label}
+  const navList = (
+    <nav className="flex-1 space-y-1 px-3 py-4">
+      {navItems.map((item) => (
+        <Link
+          key={item.href}
+          href={item.href}
+          className={cn(
+            "flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
+            pathname.startsWith(item.href)
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          )}
+        >
+          <span className="flex items-center gap-3">
+            <span>{item.icon}</span>
+            {item.label}
+          </span>
+          {item.badge !== undefined && (
+            <span
+              className={cn(
+                "flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium",
+                pathname.startsWith(item.href)
+                  ? "bg-primary-foreground/20 text-primary-foreground"
+                  : "bg-muted-foreground/10 text-muted-foreground"
+              )}
+            >
+              {item.badge}
             </span>
-            {item.badge !== undefined && (
-              <span
-                className={cn(
-                  "flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium",
-                  pathname.startsWith(item.href)
-                    ? "bg-primary-foreground/20 text-primary-foreground"
-                    : "bg-muted-foreground/10 text-muted-foreground"
-                )}
-              >
-                {item.badge}
-              </span>
-            )}
-          </Link>
-        ))}
-      </nav>
+          )}
+        </Link>
+      ))}
+    </nav>
+  );
 
-      <div className="flex items-center justify-between border-t px-3 py-3">
-        <UserButton afterSignOutUrl="/sign-in" />
-        <ThemeToggle />
-      </div>
-    </>
+  const footer = (
+    <div className="flex items-center justify-between border-t px-3 py-3">
+      <UserButton afterSignOutUrl="/sign-in" />
+      <ThemeToggle />
+    </div>
   );
 
   return (
     <>
-      {/* Mobile header bar */}
+      {/* Mobile header */}
       <div className="fixed left-0 right-0 top-0 z-40 flex h-14 items-center justify-between border-b bg-card px-4 lg:hidden">
         <button
           onClick={() => setMobileOpen(true)}
@@ -110,13 +104,10 @@ export function Sidebar() {
 
       {/* Mobile overlay */}
       {mobileOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/50 lg:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
+        <div className="fixed inset-0 z-50 bg-black/50 lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* Mobile slide-out sidebar */}
+      {/* Mobile slide-out */}
       <aside
         className={cn(
           "fixed left-0 top-0 z-50 flex h-screen w-64 flex-col border-r bg-card transition-transform duration-200 lg:hidden",
@@ -132,46 +123,18 @@ export function Sidebar() {
             ✕
           </button>
         </div>
-        <nav className="flex-1 space-y-1 px-3 py-4">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                pathname.startsWith(item.href)
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <span className="flex items-center gap-3">
-                <span>{item.icon}</span>
-                {item.label}
-              </span>
-              {item.badge !== undefined && (
-                <span
-                  className={cn(
-                    "flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium",
-                    pathname.startsWith(item.href)
-                      ? "bg-primary-foreground/20 text-primary-foreground"
-                      : "bg-muted-foreground/10 text-muted-foreground"
-                  )}
-                >
-                  {item.badge}
-                </span>
-              )}
-            </Link>
-          ))}
-        </nav>
-        <div className="flex items-center justify-between border-t px-3 py-3">
-          <UserButton afterSignOutUrl="/sign-in" />
-          <ThemeToggle />
-        </div>
+        {navList}
+        {footer}
       </aside>
 
       {/* Desktop sidebar */}
       <aside className="hidden h-screen w-64 flex-col border-r bg-card lg:flex">
-        {sidebarContent}
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <span className="text-xl font-bold">FH Enterprise</span>
+          <NotificationBell />
+        </div>
+        {navList}
+        {footer}
       </aside>
     </>
   );
