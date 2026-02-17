@@ -6,29 +6,50 @@ export const recentActivity = query({
     const user = await getCurrentUser(ctx);
     if (!user) return [];
 
-    const recentNotes = await ctx.db
-      .query("notes")
-      .order("desc")
-      .take(20);
+    // Get user's projects
+    const memberships = await ctx.db
+      .query("projectMembers")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
 
-    const userNotes = [];
-    for (const note of recentNotes) {
-      const project = await ctx.db.get(note.projectId);
-      if (project && project.ownerId === user._id) {
+    const projectIds = memberships.map((m) => m.projectId);
+
+    // Get recent notes from all user's projects
+    const allNotes: {
+      _id: string;
+      content: string;
+      projectId: string;
+      authorId: string;
+      createdAt: number;
+      authorName: string;
+      projectName: string;
+    }[] = [];
+
+    for (const pid of projectIds) {
+      const notes = await ctx.db
+        .query("notes")
+        .withIndex("by_project", (q) => q.eq("projectId", pid))
+        .order("desc")
+        .take(5);
+
+      for (const note of notes) {
         const author = await ctx.db.get(note.authorId);
-        userNotes.push({
+        const project = await ctx.db.get(pid);
+        allNotes.push({
           _id: note._id,
-          type: "note" as const,
           content: note.content,
-          projectName: project.name,
-          projectId: project._id,
-          authorName: author?.name ?? "Unknown",
+          projectId: pid,
+          authorId: note.authorId,
           createdAt: note.createdAt,
+          authorName: author?.name ?? "Unknown",
+          projectName: project?.name ?? "Unknown",
         });
       }
     }
 
-    return userNotes.slice(0, 10);
+    return allNotes
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 10);
   },
 });
 
@@ -37,22 +58,53 @@ export const upcomingDeadlines = query({
     const user = await getCurrentUser(ctx);
     if (!user) return [];
 
-    const tasks = await ctx.db
+    // Get own tasks
+    const ownTasks = await ctx.db
       .query("tasks")
       .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
       .collect();
 
-    const withDueDates = tasks
+    // Get shared project tasks
+    const memberships = await ctx.db
+      .query("projectMembers")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    const sharedProjectIds = memberships
+      .filter((m) => m.role !== "owner")
+      .map((m) => m.projectId);
+
+    const sharedTasks: (typeof ownTasks)[number][] = [];
+    for (const pid of sharedProjectIds) {
+      const projectTasks = await ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", pid))
+        .collect();
+      sharedTasks.push(...projectTasks);
+    }
+
+    const allIds = new Set<string>();
+    const all: (typeof ownTasks)[number][] = [];
+    for (const t of [...ownTasks, ...sharedTasks]) {
+      if (!allIds.has(t._id)) {
+        allIds.add(t._id);
+        all.push(t);
+      }
+    }
+
+    // Filter to tasks with due dates that aren't done, sort by due date
+    const withDeadlines = all
       .filter((t) => t.dueDate && t.status !== "done")
       .sort((a, b) => (a.dueDate ?? 0) - (b.dueDate ?? 0))
-      .slice(0, 5);
+      .slice(0, 8);
 
+    // Enrich with project names
     const enriched = await Promise.all(
-      withDueDates.map(async (task) => {
-        let projectName = null;
+      withDeadlines.map(async (task) => {
+        let projectName: string | undefined;
         if (task.projectId) {
           const project = await ctx.db.get(task.projectId);
-          projectName = project?.name ?? null;
+          projectName = project?.name;
         }
         return { ...task, projectName };
       })

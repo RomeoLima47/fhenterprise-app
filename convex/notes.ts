@@ -47,7 +47,7 @@ export const create = mutation({
     if (project) {
       await createNotification(ctx, {
         userId: user._id,
-        type: "note_added",
+        type: "system",
         title: "Note added",
         message: `New note in "${project.name}": ${args.content.slice(0, 80)}${args.content.length > 80 ? "..." : ""}`,
         linkTo: `/projects/${args.projectId}`,

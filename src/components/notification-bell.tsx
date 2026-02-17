@@ -1,21 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { api } from "../../convex/_generated/api";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-const typeIcons = {
-  task_completed: "✅",
-  task_overdue: "⏰",
-  project_archived: "📦",
-  note_added: "💬",
-  invitation: "📬",
-  comment: "🗨️",
-  system: "🔔",
-};
+import { Button } from "@/components/ui/button";
 
 function timeAgo(timestamp: number) {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -28,128 +19,179 @@ function timeAgo(timestamp: number) {
   return `${days}d ago`;
 }
 
+const typeIcons: Record<string, string> = {
+  task_completed: "✅",
+  due_soon: "⏰",
+  overdue: "🔴",
+  invitation: "📬",
+  comment: "🗨️",
+  system: "📢",
+};
+
 export function NotificationBell() {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
-
   const notifications = useQuery(api.notifications.list);
-  const unreadCount = useQuery(api.notifications.unreadCount);
-  const markAsRead = useMutation(api.notifications.markAsRead);
-  const markAllAsRead = useMutation(api.notifications.markAllAsRead);
-  const removeNotif = useMutation(api.notifications.remove);
-  const clearAll = useMutation(api.notifications.clearAll);
+  const markRead = useMutation(api.notifications.markAsRead);
+  const markAllRead = useMutation(api.notifications.markAllAsRead);
+
+  const [open, setOpen] = useState(false);
+  const bellRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  const unread = notifications?.filter((n) => !n.read).length ?? 0;
+
+  useEffect(() => setMounted(true), []);
+
+  const updatePosition = useCallback(() => {
+    if (!bellRef.current) return;
+    const rect = bellRef.current.getBoundingClientRect();
+    const panelWidth = 320;
+    const padding = 8;
+
+    // Position below the bell
+    let top = rect.bottom + 8;
+    // Align right edge with bell, but keep within viewport
+    let left = rect.right - panelWidth;
+
+    // If it goes off the left side, push it right
+    if (left < padding) left = padding;
+    // If it goes off the right side, push it left
+    if (left + panelWidth > window.innerWidth - padding) {
+      left = window.innerWidth - panelWidth - padding;
+    }
+    // If it goes below viewport, cap height will handle scroll
+    if (top < padding) top = padding;
+
+    setPos({ top, left });
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      updatePosition();
+      window.addEventListener("resize", updatePosition);
+      window.addEventListener("scroll", updatePosition, true);
+      return () => {
+        window.removeEventListener("resize", updatePosition);
+        window.removeEventListener("scroll", updatePosition, true);
+      };
+    }
+  }, [open, updatePosition]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+      if (
+        bellRef.current && !bellRef.current.contains(e.target as Node) &&
+        panelRef.current && !panelRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     }
-    if (open) document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
+  }, []);
 
-  const handleClick = async (notif: { _id: string; read: boolean; linkTo?: string }) => {
-    if (!notif.read) {
-      await markAsRead({ id: notif._id as any });
-    }
-    if (notif.linkTo) {
-      router.push(notif.linkTo);
-      setOpen(false);
-    }
-  };
+  const maxHeight = mounted ? Math.max(200, window.innerHeight - pos.top - 16) : 400;
+
+  const panel = open && mounted ? createPortal(
+    <>
+      <div className="fixed inset-0 z-[998]" onClick={() => setOpen(false)} />
+      <div
+        ref={panelRef}
+        style={{
+          position: "fixed",
+          top: pos.top,
+          left: pos.left,
+          width: 320,
+          maxHeight,
+          zIndex: 999,
+        }}
+        className="flex flex-col overflow-hidden rounded-lg border bg-card shadow-2xl"
+      >
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <p className="text-sm font-semibold">
+            Notifications {unread > 0 && <span className="text-muted-foreground">({unread})</span>}
+          </p>
+          {unread > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-xs"
+              onClick={async () => { await markAllRead({}); }}
+            >
+              Mark all read
+            </Button>
+          )}
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {notifications === undefined ? (
+            <div className="space-y-2 p-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-12 animate-pulse rounded bg-muted" />
+              ))}
+            </div>
+          ) : notifications.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="mb-1 text-2xl">🔔</p>
+              <p className="text-sm text-muted-foreground">No notifications yet.</p>
+            </div>
+          ) : (
+            notifications.slice(0, 20).map((notification) => (
+              <button
+                key={notification._id}
+                onClick={async () => {
+                  if (!notification.read) { await markRead({ id: notification._id }); }
+                  if (notification.linkTo) { router.push(notification.linkTo); }
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-start gap-3 border-b px-4 py-3 text-left transition-colors last:border-0 hover:bg-muted/50",
+                  !notification.read && "bg-primary/5"
+                )}
+              >
+                <span className="mt-0.5 text-base flex-shrink-0">
+                  {typeIcons[notification.type] || "📢"}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className={cn("text-sm leading-snug", !notification.read && "font-medium")}>
+                    {notification.title}
+                  </p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                    {notification.message}
+                  </p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    {timeAgo(notification.createdAt)}
+                  </p>
+                </div>
+                {!notification.read && (
+                  <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-primary" />
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </>,
+    document.body
+  ) : null;
 
   return (
-    <div className="relative" ref={panelRef}>
+    <>
       <button
+        ref={bellRef}
         onClick={() => setOpen(!open)}
         className="relative rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
         🔔
-        {(unreadCount ?? 0) > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-            {unreadCount! > 9 ? "9+" : unreadCount}
+        {unread > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-medium text-white">
+            {unread > 9 ? "9+" : unread}
           </span>
         )}
       </button>
-
-      {open && (
-        <div className="absolute left-0 top-full z-50 mt-2 w-80 rounded-lg border bg-card shadow-lg">
-          <div className="flex items-center justify-between border-b px-4 py-3">
-            <h3 className="text-sm font-semibold">Notifications</h3>
-            <div className="flex gap-1">
-              {(unreadCount ?? 0) > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => markAllAsRead()}
-                >
-                  Mark all read
-                </Button>
-              )}
-              {(notifications?.length ?? 0) > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs text-muted-foreground"
-                  onClick={() => clearAll()}
-                >
-                  Clear
-                </Button>
-              )}
-            </div>
-          </div>
-
-          <div className="max-h-80 overflow-y-auto">
-            {!notifications || notifications.length === 0 ? (
-              <div className="py-8 text-center">
-                <p className="mb-1 text-xl">🔔</p>
-                <p className="text-sm text-muted-foreground">No notifications</p>
-              </div>
-            ) : (
-              notifications.map((notif) => (
-                <div
-                  key={notif._id}
-                  onClick={() => handleClick(notif)}
-                  className={cn(
-                    "flex cursor-pointer items-start gap-3 border-b px-4 py-3 transition-colors last:border-0 hover:bg-muted/50",
-                    !notif.read && "bg-primary/5"
-                  )}
-                >
-                  <span className="mt-0.5 text-base">
-                    {typeIcons[notif.type] || "🔔"}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className={cn("text-sm truncate", !notif.read && "font-medium")}>
-                        {notif.title}
-                      </p>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeNotif({ id: notif._id });
-                        }}
-                        className="flex-shrink-0 text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate">{notif.message}</p>
-                    <p className="mt-0.5 text-[10px] text-muted-foreground">
-                      {timeAgo(notif.createdAt)}
-                    </p>
-                  </div>
-                  {!notif.read && (
-                    <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-primary" />
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+      {panel}
+    </>
   );
 }

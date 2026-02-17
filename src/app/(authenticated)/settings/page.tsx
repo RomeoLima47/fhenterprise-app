@@ -5,120 +5,166 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+
+function formatDate(timestamp: number) {
+  return new Date(timestamp).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
 
 export default function SettingsPage() {
   const { user } = useUser();
-  const convexUser = useQuery(api.users.me);
   const tasks = useQuery(api.tasks.list);
   const projects = useQuery(api.projects.list);
 
-  const completedTasks = tasks?.filter((t) => t.status === "done").length ?? 0;
   const totalTasks = tasks?.length ?? 0;
-  const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const completedTasks = tasks?.filter((t) => t.status === "done").length ?? 0;
+  const totalProjects = projects?.length ?? 0;
 
   return (
-    <div className="max-w-2xl">
-      <h1 className="mb-6 text-3xl font-bold">Settings</h1>
+    <div className="mx-auto max-w-2xl">
+      <h1 className="mb-6 text-2xl font-bold sm:text-3xl">Settings</h1>
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Profile</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-4">
-            {user?.imageUrl && (
-              <img
-                src={user.imageUrl}
-                alt="Profile"
-                className="h-16 w-16 rounded-full"
-              />
+      <div className="space-y-6">
+        {/* Profile */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Profile</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              {user?.imageUrl ? (
+                <img src={user.imageUrl} alt="" className="h-16 w-16 rounded-full" />
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
+                  {user?.firstName?.charAt(0) ?? "?"}
+                </div>
+              )}
+              <div>
+                <p className="text-lg font-semibold">
+                  {user?.fullName ?? "User"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {user?.primaryEmailAddress?.emailAddress}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Member since {user?.createdAt ? formatDate(new Date(user.createdAt).getTime()) : "—"}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Stats */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Your Stats</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-2xl font-bold">{totalTasks}</p>
+                <p className="text-xs text-muted-foreground">Total Tasks</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-green-500">{completedTasks}</p>
+                <p className="text-xs text-muted-foreground">Completed</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{totalProjects}</p>
+                <p className="text-xs text-muted-foreground">Projects</p>
+              </div>
+            </div>
+            {totalTasks > 0 && (
+              <div className="mt-4">
+                <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                  <span>Completion rate</span>
+                  <span>{Math.round((completedTasks / totalTasks) * 100)}%</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-green-500 transition-all"
+                    style={{ width: `${(completedTasks / totalTasks) * 100}%` }}
+                  />
+                </div>
+              </div>
             )}
-            <div>
-              <p className="text-lg font-medium">
-                {user?.fullName ?? "Loading..."}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {user?.primaryEmailAddress?.emailAddress ?? ""}
-              </p>
-              <Badge variant="secondary" className="mt-1">
-                {convexUser?.role ?? "member"}
-              </Badge>
-            </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          <Separator className="my-4" />
+        {/* Keyboard Shortcuts */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Keyboard Shortcuts</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {[
+                { keys: "Ctrl + K", action: "Open global search" },
+                { keys: "↑ ↓", action: "Navigate search results" },
+                { keys: "Enter", action: "Select search result" },
+                { keys: "Esc", action: "Close dialogs & search" },
+              ].map((shortcut) => (
+                <div key={shortcut.keys} className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">{shortcut.action}</span>
+                  <kbd className="rounded border bg-muted px-2 py-0.5 text-xs font-mono">
+                    {shortcut.keys}
+                  </kbd>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Member since</span>
-              <span>
-                {convexUser?.createdAt
-                  ? new Date(convexUser.createdAt).toLocaleDateString("en-US", {
-                      month: "long",
-                      day: "numeric",
-                      year: "numeric",
-                    })
-                  : "..."}
-              </span>
+        {/* About */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">About</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <div className="flex items-center justify-between">
+                <span>App</span>
+                <Badge variant="secondary">FH Enterprise v1.0</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Backend</span>
+                <Badge variant="secondary">Convex</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Auth</span>
+                <Badge variant="secondary">Clerk</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Hosting</span>
+                <Badge variant="secondary">Vercel</Badge>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Clerk ID</span>
-              <span className="font-mono text-xs">{convexUser?.clerkId ?? "..."}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Statistics</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <p className="text-2xl font-bold">{totalTasks}</p>
-              <p className="text-sm text-muted-foreground">Total Tasks</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-green-500">{completedTasks}</p>
-              <p className="text-sm text-muted-foreground">Completed</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{completionRate}%</p>
-              <p className="text-sm text-muted-foreground">Completion Rate</p>
-            </div>
-          </div>
-
-          <Separator className="my-4" />
-
-          <div className="grid grid-cols-2 gap-4 text-center">
-            <div>
-              <p className="text-2xl font-bold">{projects?.length ?? 0}</p>
-              <p className="text-sm text-muted-foreground">Total Projects</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-green-500">
-                {projects?.filter((p) => p.status === "active").length ?? 0}
-              </p>
-              <p className="text-sm text-muted-foreground">Active Projects</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Account</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            To update your profile picture, name, email, or password, click the
-            user avatar in the bottom-left of the sidebar. Clerk manages your
-            account settings securely.
-          </p>
-        </CardContent>
-      </Card>
+        {/* Account Management */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Account</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-sm text-muted-foreground">
+              Manage your account settings, update your profile picture, or change your password through Clerk.
+            </p>
+            <a
+              href="https://accounts.clerk.dev/user"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+            >
+              Manage account →
+            </a>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

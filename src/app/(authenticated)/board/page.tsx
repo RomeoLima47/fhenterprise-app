@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import {
   DragDropContext,
@@ -18,6 +18,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { useToast } from "@/components/toast";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 const columns = [
@@ -32,20 +34,14 @@ const priorityColors = {
   high: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
 };
 
-const priorityDots = {
-  high: "bg-red-500",
-  medium: "bg-orange-400",
-  low: "bg-gray-400",
-};
+const priorityDots = { high: "bg-red-500", medium: "bg-orange-400", low: "bg-gray-400" };
 
 function formatDate(timestamp: number) {
-  return new Date(timestamp).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
+  return new Date(timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 export default function BoardPage() {
+  const { toast } = useToast();
   const tasks = useQuery(api.tasks.list);
   const projects = useQuery(api.projects.list);
   const updateTask = useMutation(api.tasks.update);
@@ -61,12 +57,19 @@ export default function BoardPage() {
   const [dueDate, setDueDate] = useState<string>("");
 
   const [filterProject, setFilterProject] = useState<string>("all");
+  const [deleteConfirm, setDeleteConfirm] = useState<Id<"tasks"> | null>(null);
+  const deleteTaskName = tasks?.find((t) => t._id === deleteConfirm)?.title ?? "";
 
   const handleDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
     const taskId = result.draggableId as Id<"tasks">;
     const newStatus = result.destination.droppableId as "todo" | "in_progress" | "done";
-    await updateTask({ id: taskId, status: newStatus });
+    const task = tasks?.find((t) => t._id === taskId);
+    if (task && task.status !== newStatus) {
+      await updateTask({ id: taskId, status: newStatus });
+      if (newStatus === "done") toast(`"${task.title}" completed! 🎉`);
+      else toast(`Moved to ${columns.find((c) => c.id === newStatus)?.label}`);
+    }
   };
 
   const openCreateForColumn = (columnId: string) => {
@@ -84,12 +87,14 @@ export default function BoardPage() {
       projectId: projectId ? (projectId as Id<"projects">) : undefined,
       dueDate: dueDate ? new Date(dueDate).getTime() : undefined,
     });
-    setTitle("");
-    setDescription("");
-    setPriority("medium");
-    setProjectId("");
-    setDueDate("");
-    setCreateOpen(false);
+    toast(`Task "${title}" created`);
+    setTitle(""); setDescription(""); setPriority("medium"); setProjectId(""); setDueDate(""); setCreateOpen(false);
+  };
+
+  const handleDelete = async (id: Id<"tasks">) => {
+    const name = tasks?.find((t) => t._id === id)?.title;
+    await deleteTask({ id });
+    toast(`"${name}" deleted`);
   };
 
   const getProjectName = (pid?: Id<"projects">) => {
@@ -105,8 +110,7 @@ export default function BoardPage() {
     return true;
   });
 
-  const getColumnTasks = (status: string) =>
-    filteredTasks?.filter((t) => t.status === status) ?? [];
+  const getColumnTasks = (status: string) => filteredTasks?.filter((t) => t.status === status) ?? [];
 
   if (!tasks || !projects) {
     return (
@@ -115,9 +119,7 @@ export default function BoardPage() {
           <div className="h-9 w-48 animate-pulse rounded bg-muted" />
         </div>
         <div className="grid grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-96 animate-pulse rounded-lg bg-muted" />
-          ))}
+          {[1, 2, 3].map((i) => <div key={i} className="h-96 animate-pulse rounded-lg bg-muted" />)}
         </div>
       </div>
     );
@@ -130,14 +132,12 @@ export default function BoardPage() {
         <select
           className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm sm:w-auto"
           value={filterProject}
-          onChange={(e) => setFilterProject(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterProject(e.target.value)}
         >
           <option value="all">All projects</option>
           <option value="none">No project</option>
           {projects.filter((p) => p.status === "active").map((project) => (
-            <option key={project._id} value={project._id}>
-              {project.name}
-            </option>
+            <option key={project._id} value={project._id}>{project.name}</option>
           ))}
         </select>
       </div>
@@ -145,52 +145,45 @@ export default function BoardPage() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              Add Task to {columns.find((c) => c.id === createColumn)?.label}
-            </DialogTitle>
+            <DialogTitle>Add Task to {columns.find((c) => c.id === createColumn)?.label}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-4">
-            <Input placeholder="Task title" value={title} onChange={(e) => setTitle(e.target.value)} />
-            <Input placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
-            <select
-              className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
-            >
+            <Input placeholder="Task title" value={title} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)} autoFocus />
+            <Input placeholder="Description (optional)" value={description} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDescription(e.target.value)} />
+            <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={priority} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPriority(e.target.value as "low" | "medium" | "high")}>
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
             </select>
-            <select
-              className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-            >
+            <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={projectId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setProjectId(e.target.value)}>
               <option value="">No project</option>
               {projects.filter((p) => p.status === "active").map((project) => (
-                <option key={project._id} value={project._id}>
-                  {project.name}
-                </option>
+                <option key={project._id} value={project._id}>{project.name}</option>
               ))}
             </select>
             <div>
               <label className="mb-1 block text-sm text-muted-foreground">Due date (optional)</label>
-              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              <Input type="date" value={dueDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDueDate(e.target.value)} />
             </div>
             <Button onClick={handleCreate} className="w-full">Create</Button>
           </div>
         </DialogContent>
       </Dialog>
 
+      <ConfirmDialog
+        open={!!deleteConfirm}
+        onOpenChange={(open) => !open && setDeleteConfirm(null)}
+        title="Delete task?"
+        message={`Are you sure you want to delete "${deleteTaskName}"? This cannot be undone.`}
+        onConfirm={() => { if (deleteConfirm) handleDelete(deleteConfirm); }}
+      />
+
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="flex flex-1 gap-4 overflow-x-auto pb-4">
           {columns.map((column) => {
             const columnTasks = getColumnTasks(column.id);
             return (
-              <div
-                key={column.id}
-                className={`flex min-w-[280px] flex-1 flex-col rounded-lg border-t-4 ${column.color} ${column.bg} p-3`}
-              >
+              <div key={column.id} className={`flex min-w-[280px] flex-1 flex-col rounded-lg border-t-4 ${column.color} ${column.bg} p-3`}>
                 <div className="mb-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <h2 className="text-sm font-semibold">{column.label}</h2>
@@ -198,14 +191,7 @@ export default function BoardPage() {
                       {columnTasks.length}
                     </span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={() => openCreateForColumn(column.id)}
-                  >
-                    +
-                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openCreateForColumn(column.id)}>+</Button>
                 </div>
 
                 <Droppable droppableId={column.id}>
@@ -213,17 +199,12 @@ export default function BoardPage() {
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`flex-1 space-y-2 rounded-md p-1 transition-colors ${
-                        snapshot.isDraggingOver ? "bg-primary/5" : ""
-                      }`}
+                      className={`flex-1 space-y-2 rounded-md p-1 transition-colors ${snapshot.isDraggingOver ? "bg-primary/5" : ""}`}
                       style={{ minHeight: "200px" }}
                     >
                       {columnTasks.map((task, index) => {
                         const projectName = getProjectName(task.projectId);
-                        const overdue =
-                          task.status !== "done" &&
-                          task.dueDate &&
-                          task.dueDate < Date.now();
+                        const overdue = task.status !== "done" && task.dueDate && task.dueDate < Date.now();
 
                         return (
                           <Draggable key={task._id} draggableId={task._id} index={index}>
@@ -232,54 +213,35 @@ export default function BoardPage() {
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
-                                className={`rounded-md border bg-card p-3 shadow-sm transition-shadow ${
-                                  snapshot.isDragging ? "shadow-lg ring-2 ring-primary/20" : "hover:shadow-md"
-                                }`}
+                                className={`rounded-md border bg-card p-3 shadow-sm transition-shadow ${snapshot.isDragging ? "shadow-lg ring-2 ring-primary/20" : "hover:shadow-md"}`}
                               >
                                 <div className="mb-2 flex items-start justify-between">
-                                  <p
-                                    className={`text-sm font-medium ${
-                                      task.status === "done" ? "text-muted-foreground line-through" : ""
-                                    }`}
-                                  >
+                                  <p className={`text-sm font-medium ${task.status === "done" ? "text-muted-foreground line-through" : ""}`}>
                                     {task.title}
                                   </p>
                                   <button
-                                    onClick={() => deleteTask({ id: task._id })}
+                                    onClick={() => setDeleteConfirm(task._id)}
                                     className="ml-2 flex-shrink-0 text-xs text-muted-foreground hover:text-foreground"
                                   >
                                     ×
                                   </button>
                                 </div>
                                 {task.description && (
-                                  <p className="mb-2 text-xs text-muted-foreground line-clamp-2">
-                                    {task.description}
-                                  </p>
+                                  <p className="mb-2 text-xs text-muted-foreground line-clamp-2">{task.description}</p>
                                 )}
                                 <div className="flex flex-wrap items-center gap-1.5">
-                                  <span
-                                    className={`inline-block h-2 w-2 rounded-full ${priorityDots[task.priority]}`}
-                                    title={task.priority}
-                                  />
-                                  <Badge
-                                    variant="secondary"
-                                    className={`text-[10px] ${priorityColors[task.priority]}`}
-                                  >
+                                  <span className={`inline-block h-2 w-2 rounded-full ${priorityDots[task.priority]}`} title={task.priority} />
+                                  <Badge variant="secondary" className={`text-[10px] ${priorityColors[task.priority]}`}>
                                     {task.priority}
                                   </Badge>
-                                  {projectName && (
-                                    <span className="text-[10px] text-muted-foreground">
-                                      📁 {projectName}
-                                    </span>
-                                  )}
+                                  {projectName && <span className="text-[10px] text-muted-foreground">📁 {projectName}</span>}
                                   {task.dueDate && (
-                                    <span
-                                      className={`text-[10px] ${
-                                        overdue ? "font-medium text-red-500" : "text-muted-foreground"
-                                      }`}
-                                    >
+                                    <span className={`text-[10px] ${overdue ? "font-medium text-red-500" : "text-muted-foreground"}`}>
                                       📅 {formatDate(task.dueDate)}
                                     </span>
+                                  )}
+                                  {task.assigneeName && (
+                                    <span className="text-[10px] text-muted-foreground">👤 {task.assigneeName}</span>
                                   )}
                                 </div>
                               </div>

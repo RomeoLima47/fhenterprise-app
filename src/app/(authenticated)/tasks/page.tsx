@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TasksPageSkeleton } from "@/components/skeletons";
 import { TaskComments } from "@/components/task-comments";
 import { FileAttachments } from "@/components/file-attachments";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { useToast } from "@/components/toast";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 const statusColors = {
@@ -37,6 +39,7 @@ function formatDate(timestamp: number) {
 }
 
 export default function TasksPage() {
+  const { toast } = useToast();
   const tasks = useQuery(api.tasks.list);
   const projects = useQuery(api.projects.list);
   const teammates = useQuery(api.team.listTeammates);
@@ -67,6 +70,9 @@ export default function TasksPage() {
   const [filterAssignee, setFilterAssignee] = useState("all");
   const [search, setSearch] = useState("");
 
+  const [deleteConfirm, setDeleteConfirm] = useState<Id<"tasks"> | null>(null);
+  const deleteTaskName = tasks?.find((t) => t._id === deleteConfirm)?.title ?? "";
+
   if (tasks === undefined || projects === undefined) {
     return <TasksPageSkeleton />;
   }
@@ -82,6 +88,7 @@ export default function TasksPage() {
       dueDate: dueDate ? new Date(dueDate).getTime() : undefined,
       assigneeId: assigneeId ? (assigneeId as Id<"users">) : undefined,
     });
+    toast(`Task "${title}" created`);
     setTitle(""); setDescription(""); setStatus("todo"); setPriority("medium");
     setProjectId(""); setDueDate(""); setAssigneeId(""); setCreateOpen(false);
   };
@@ -109,7 +116,14 @@ export default function TasksPage() {
       dueDate: editDueDate ? new Date(editDueDate).getTime() : undefined,
       assigneeId: editAssigneeId ? (editAssigneeId as Id<"users">) : undefined,
     });
+    toast("Task updated");
     setEditTask(null);
+  };
+
+  const handleDelete = async (id: Id<"tasks">) => {
+    const name = tasks.find((t) => t._id === id)?.title;
+    await deleteTask({ id });
+    toast(`"${name}" deleted`);
   };
 
   const getProjectName = (pid?: Id<"projects">) => {
@@ -131,7 +145,7 @@ export default function TasksPage() {
     <select
       className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange(e.target.value)}
     >
       <option value="">Unassigned</option>
       {(teammates ?? []).map((t) => (
@@ -143,7 +157,12 @@ export default function TasksPage() {
   return (
     <div>
       <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold sm:text-3xl">Tasks</h1>
+        <div>
+          <h1 className="text-2xl font-bold sm:text-3xl">Tasks</h1>
+          <p className="text-sm text-muted-foreground">
+            {tasks.length} total · {tasks.filter((t) => t.status === "done").length} completed
+          </p>
+        </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button className="w-full sm:w-auto">+ New Task</Button>
@@ -151,21 +170,21 @@ export default function TasksPage() {
           <DialogContent>
             <DialogHeader><DialogTitle>Create Task</DialogTitle></DialogHeader>
             <div className="space-y-4 pt-4">
-              <Input placeholder="Task title" value={title} onChange={(e) => setTitle(e.target.value)} />
-              <Input placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
+              <Input placeholder="Task title" value={title} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)} autoFocus />
+              <Input placeholder="Description (optional)" value={description} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDescription(e.target.value)} />
               <div className="grid grid-cols-2 gap-2">
-                <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={status} onChange={(e) => setStatus(e.target.value as any)}>
+                <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={status} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStatus(e.target.value as any)}>
                   <option value="todo">To Do</option>
                   <option value="in_progress">In Progress</option>
                   <option value="done">Done</option>
                 </select>
-                <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={priority} onChange={(e) => setPriority(e.target.value as any)}>
+                <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={priority} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPriority(e.target.value as any)}>
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
                   <option value="high">High</option>
                 </select>
               </div>
-              <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+              <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={projectId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setProjectId(e.target.value)}>
                 <option value="">No project</option>
                 {projects.filter((p) => p.status === "active").map((p) => (
                   <option key={p._id} value={p._id}>{p.name}</option>
@@ -177,7 +196,7 @@ export default function TasksPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs text-muted-foreground">Due date (optional)</label>
-                <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                <Input type="date" value={dueDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDueDate(e.target.value)} />
               </div>
               <Button onClick={handleCreate} className="w-full">Create</Button>
             </div>
@@ -186,20 +205,20 @@ export default function TasksPage() {
       </div>
 
       <div className="mb-4 flex flex-col gap-2 sm:mb-6 sm:flex-row sm:flex-wrap">
-        <Input placeholder="Search tasks..." value={search} onChange={(e) => setSearch(e.target.value)} className="sm:max-w-xs" />
-        <select className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+        <Input placeholder="Search tasks..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} className="sm:max-w-xs" />
+        <select className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm" value={filterStatus} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterStatus(e.target.value)}>
           <option value="all">All statuses</option>
           <option value="todo">To Do</option>
           <option value="in_progress">In Progress</option>
           <option value="done">Done</option>
         </select>
-        <select className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm" value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
+        <select className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm" value={filterPriority} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterPriority(e.target.value)}>
           <option value="all">All priorities</option>
           <option value="high">High</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
         </select>
-        <select className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm" value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)}>
+        <select className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm" value={filterAssignee} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterAssignee(e.target.value)}>
           <option value="all">All assignees</option>
           <option value="assigned">Assigned</option>
           <option value="unassigned">Unassigned</option>
@@ -230,10 +249,11 @@ export default function TasksPage() {
                 <CardContent className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-4">
                   <div className="flex items-start gap-3">
                     <button
-                      onClick={(e) => {
+                      onClick={(e: React.MouseEvent) => {
                         e.stopPropagation();
                         const next = task.status === "todo" ? "in_progress" : task.status === "in_progress" ? "done" : "todo";
                         updateTask({ id: task._id, status: next });
+                        if (next === "done") toast(`"${task.title}" completed! 🎉`);
                       }}
                       className="mt-0.5 text-base transition-transform hover:scale-110"
                     >
@@ -248,9 +268,7 @@ export default function TasksPage() {
                         {task.dueDate && (
                           <span className={overdue ? "font-medium text-red-500" : ""}>📅 {formatDate(task.dueDate)}</span>
                         )}
-                        {task.assigneeName && (
-                          <span>👤 {task.assigneeName}</span>
-                        )}
+                        {task.assigneeName && <span>👤 {task.assigneeName}</span>}
                       </div>
                     </div>
                   </div>
@@ -261,7 +279,7 @@ export default function TasksPage() {
                     <Badge variant="secondary" className={`text-xs ${priorityColors[task.priority]}`}>
                       {task.priority}
                     </Badge>
-                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); deleteTask({ id: task._id }); }}>
+                    <Button variant="ghost" size="sm" onClick={(e: React.MouseEvent) => { e.stopPropagation(); setDeleteConfirm(task._id); }}>
                       🗑️
                     </Button>
                   </div>
@@ -272,26 +290,36 @@ export default function TasksPage() {
         </div>
       )}
 
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={!!deleteConfirm}
+        onOpenChange={(open) => !open && setDeleteConfirm(null)}
+        title="Delete task?"
+        message={`Are you sure you want to delete "${deleteTaskName}"? This cannot be undone.`}
+        onConfirm={() => { if (deleteConfirm) handleDelete(deleteConfirm); }}
+      />
+
+      {/* Task Detail Dialog */}
       <Dialog open={!!editTask} onOpenChange={(open) => !open && setEditTask(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader><DialogTitle>Task Details</DialogTitle></DialogHeader>
           {editTask && (
             <div className="space-y-4 pt-4">
-              <Input placeholder="Task title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
-              <Input placeholder="Description (optional)" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+              <Input placeholder="Task title" value={editTitle} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditTitle(e.target.value)} />
+              <Input placeholder="Description (optional)" value={editDescription} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditDescription(e.target.value)} />
               <div className="grid grid-cols-2 gap-2">
-                <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={editStatus} onChange={(e) => setEditStatus(e.target.value as any)}>
+                <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={editStatus} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setEditStatus(e.target.value as any)}>
                   <option value="todo">To Do</option>
                   <option value="in_progress">In Progress</option>
                   <option value="done">Done</option>
                 </select>
-                <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={editPriority} onChange={(e) => setEditPriority(e.target.value as any)}>
+                <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={editPriority} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setEditPriority(e.target.value as any)}>
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
                   <option value="high">High</option>
                 </select>
               </div>
-              <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={editProjectId} onChange={(e) => setEditProjectId(e.target.value)}>
+              <select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={editProjectId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setEditProjectId(e.target.value)}>
                 <option value="">No project</option>
                 {projects.filter((p) => p.status === "active").map((p) => (
                   <option key={p._id} value={p._id}>{p.name}</option>
@@ -303,7 +331,7 @@ export default function TasksPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs text-muted-foreground">Due date</label>
-                <Input type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
+                <Input type="date" value={editDueDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditDueDate(e.target.value)} />
               </div>
               <Button onClick={handleEdit} className="w-full">Save Changes</Button>
 

@@ -1,7 +1,6 @@
-import { query, mutation, QueryCtx } from "./_generated/server";
-import { v } from "convex/values";
+import { query, mutation, type QueryCtx, type MutationCtx } from "./_generated/server";
 
-export async function getCurrentUser(ctx: QueryCtx) {
+export async function getCurrentUser(ctx: QueryCtx | MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return null;
 
@@ -23,9 +22,15 @@ export const store = mutation({
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
 
+    const name =
+      identity.name ??
+      identity.givenName ??
+      identity.email ??
+      "Anonymous";
+
     if (existing) {
       await ctx.db.patch(existing._id, {
-        name: identity.name ?? "Unknown",
+        name,
         email: identity.email ?? "",
         imageUrl: identity.pictureUrl,
       });
@@ -34,16 +39,14 @@ export const store = mutation({
 
     return await ctx.db.insert("users", {
       clerkId: identity.subject,
-      name: identity.name ?? "Unknown",
+      name,
       email: identity.email ?? "",
       imageUrl: identity.pictureUrl,
-      role: "member",
-      createdAt: Date.now(),
     });
   },
 });
 
-export const me = query({
+export const currentUser = query({
   handler: async (ctx) => {
     return await getCurrentUser(ctx);
   },

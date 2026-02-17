@@ -12,13 +12,12 @@ export const listForProject = query({
     const invitations = await ctx.db
       .query("invitations")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .order("desc")
       .collect();
 
     const enriched = await Promise.all(
       invitations.map(async (inv) => {
-        const inviter = await ctx.db.get(inv.invitedBy);
-        return { ...inv, inviterName: inviter?.name ?? "Unknown" };
+        const inviter = await ctx.db.get(inv.inviterId);
+        return { ...inv, inviterName: (inviter as any)?.name ?? "Unknown" };
       })
     );
 
@@ -31,21 +30,21 @@ export const listMyPending = query({
     const user = await getCurrentUser(ctx);
     if (!user) return [];
 
-    const pending = await ctx.db
+    const allByEmail = await ctx.db
       .query("invitations")
-      .withIndex("by_email_status", (q) =>
-        q.eq("email", user.email).eq("status", "pending")
-      )
+      .withIndex("by_email", (q) => q.eq("email", user.email))
       .collect();
+
+    const pending = allByEmail.filter((inv) => inv.status === "pending");
 
     const enriched = await Promise.all(
       pending.map(async (inv) => {
+        const inviter = await ctx.db.get(inv.inviterId);
         const project = await ctx.db.get(inv.projectId);
-        const inviter = await ctx.db.get(inv.invitedBy);
         return {
           ...inv,
-          projectName: project?.name ?? "Unknown",
-          inviterName: inviter?.name ?? "Unknown",
+          inviterName: (inviter as any)?.name ?? "Unknown",
+          projectName: (project as any)?.name ?? "Unknown",
         };
       })
     );
@@ -56,68 +55,47 @@ export const listMyPending = query({
 
 export const send = mutation({
   args: {
-    email: v.string(),
     projectId: v.id("projects"),
+    email: v.string(),
     role: v.union(v.literal("editor"), v.literal("viewer")),
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
 
+    // Check if user owns the project
     const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
-    if (project.ownerId !== user._id) throw new Error("Only project owners can invite");
-
-    if (args.email === user.email) throw new Error("Cannot invite yourself");
-
-    // Check for existing pending invitation
-    const existing = await ctx.db
-      .query("invitations")
-      .withIndex("by_email_status", (q) =>
-        q.eq("email", args.email).eq("status", "pending")
-      )
-      .collect();
-
-    const alreadyInvited = existing.some((inv) => inv.projectId === args.projectId);
-    if (alreadyInvited) throw new Error("Already invited to this project");
-
-    // Check if already a member
-    const members = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .collect();
-
-    for (const member of members) {
-      const memberUser = await ctx.db.get(member.userId);
-      if (memberUser?.email === args.email) {
-        throw new Error("Already a member of this project");
-      }
+    if (!project || project.ownerId !== user._id) {
+      throw new Error("Only the project owner can send invitations");
     }
 
-    await ctx.db.insert("invitations", {
-      email: args.email,
-      projectId: args.projectId,
-      role: args.role,
-      invitedBy: user._id,
-      status: "pending",
-      createdAt: Date.now(),
-    });
-
-    // Notify the invitee if they have an account
-    const invitedUsers = await ctx.db
-      .query("users")
+    // Check for existing pending invite
+    const allByEmail = await ctx.db
+      .query("invitations")
       .withIndex("by_email", (q) => q.eq("email", args.email))
       .collect();
 
-    if (invitedUsers.length > 0) {
-      await createNotification(ctx, {
-        userId: invitedUsers[0]._id,
-        type: "invitation",
-        title: "Project invitation",
-        message: `${user.name} invited you to "${project.name}" as ${args.role}.`,
-        linkTo: "/invitations",
-      });
+    const existing = allByEmail.find(
+      (inv) => inv.projectId === args.projectId && inv.status === "pending"
+    );
+
+    if (existing) {
+      throw new Error("An invitation is already pending for this email");
     }
+
+    // Can't invite yourself
+    if (args.email === user.email) {
+      throw new Error("You cannot invite yourself");
+    }
+
+    await ctx.db.insert("invitations", {
+      projectId: args.projectId,
+      email: args.email,
+      role: args.role,
+      inviterId: user._id,
+      status: "pending",
+      createdAt: Date.now(),
+    });
   },
 });
 
@@ -130,11 +108,11 @@ export const accept = mutation({
     const invitation = await ctx.db.get(args.id);
     if (!invitation) throw new Error("Invitation not found");
     if (invitation.email !== user.email) throw new Error("Not your invitation");
-    if (invitation.status !== "pending") throw new Error("Invitation already handled");
+    if (invitation.status !== "pending") throw new Error("Invitation is no longer pending");
 
     await ctx.db.patch(args.id, { status: "accepted" });
 
-    // Add as project member
+    // Add user to project
     await ctx.db.insert("projectMembers", {
       projectId: invitation.projectId,
       userId: user._id,
@@ -142,13 +120,12 @@ export const accept = mutation({
       addedAt: Date.now(),
     });
 
-    // Notify the inviter
-    const project = await ctx.db.get(invitation.projectId);
+    // Notify project owner
     await createNotification(ctx, {
-      userId: invitation.invitedBy,
-      type: "system",
+      userId: invitation.inviterId,
+      type: "invitation",
       title: "Invitation accepted",
-      message: `${user.name} joined "${project?.name ?? "project"}" as ${invitation.role}.`,
+      message: `${user.name} accepted your invitation.`,
       linkTo: `/projects/${invitation.projectId}`,
     });
   },
@@ -163,7 +140,6 @@ export const decline = mutation({
     const invitation = await ctx.db.get(args.id);
     if (!invitation) throw new Error("Invitation not found");
     if (invitation.email !== user.email) throw new Error("Not your invitation");
-    if (invitation.status !== "pending") throw new Error("Invitation already handled");
 
     await ctx.db.patch(args.id, { status: "declined" });
   },
@@ -179,7 +155,9 @@ export const revoke = mutation({
     if (!invitation) throw new Error("Invitation not found");
 
     const project = await ctx.db.get(invitation.projectId);
-    if (!project || project.ownerId !== user._id) throw new Error("Not authorized");
+    if (!project || project.ownerId !== user._id) {
+      throw new Error("Only the project owner can revoke invitations");
+    }
 
     await ctx.db.delete(args.id);
   },
