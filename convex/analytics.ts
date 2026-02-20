@@ -75,7 +75,7 @@ export const overview = query({
     // Overdue tasks
     const now = Date.now();
     const overdueTasks = tasks.filter(
-      (t) => t.dueDate && t.dueDate < now && t.status !== "done"
+      (t) => t.endDate && t.endDate < now && t.status !== "done"
     );
 
     // Tasks completed in last 7 days

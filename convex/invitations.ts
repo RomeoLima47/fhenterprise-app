@@ -63,7 +63,6 @@ export const send = mutation({
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
 
-    // Check if user owns the project
     const project = await ctx.db.get(args.projectId);
     if (!project || project.ownerId !== user._id) {
       throw new Error("Only the project owner can send invitations");
@@ -83,7 +82,6 @@ export const send = mutation({
       throw new Error("An invitation is already pending for this email");
     }
 
-    // Can't invite yourself
     if (args.email === user.email) {
       throw new Error("You cannot invite yourself");
     }
@@ -96,6 +94,25 @@ export const send = mutation({
       status: "pending",
       createdAt: Date.now(),
     });
+
+    // Track as recent contact
+    const existingContact = await ctx.db
+      .query("recentContacts")
+      .withIndex("by_user_email", (q) =>
+        q.eq("userId", user._id).eq("email", args.email)
+      )
+      .unique();
+
+    if (existingContact) {
+      await ctx.db.patch(existingContact._id, { lastUsedAt: Date.now() });
+    } else {
+      await ctx.db.insert("recentContacts", {
+        userId: user._id,
+        email: args.email,
+        isFavorite: false,
+        lastUsedAt: Date.now(),
+      });
+    }
   },
 });
 
@@ -112,7 +129,6 @@ export const accept = mutation({
 
     await ctx.db.patch(args.id, { status: "accepted" });
 
-    // Add user to project
     await ctx.db.insert("projectMembers", {
       projectId: invitation.projectId,
       userId: user._id,
@@ -120,7 +136,18 @@ export const accept = mutation({
       addedAt: Date.now(),
     });
 
-    // Notify project owner
+    // Update the inviter's contact with the user's name
+    const inviterContacts = await ctx.db
+      .query("recentContacts")
+      .withIndex("by_user_email", (q) =>
+        q.eq("userId", invitation.inviterId).eq("email", user.email)
+      )
+      .unique();
+
+    if (inviterContacts) {
+      await ctx.db.patch(inviterContacts._id, { name: user.name });
+    }
+
     await createNotification(ctx, {
       userId: invitation.inviterId,
       type: "invitation",

@@ -3,37 +3,69 @@ import { v } from "convex/values";
 import { getCurrentUser } from "./users";
 import { createNotification } from "./notifications";
 
+async function enrichComments(ctx: any, comments: any[]) {
+  const enriched = await Promise.all(
+    comments.map(async (comment: any) => {
+      const author = await ctx.db.get(comment.authorId);
+      return {
+        ...comment,
+        authorName: author?.name ?? "Unknown",
+        authorImage: author?.imageUrl,
+      };
+    })
+  );
+  return enriched.sort((a: any, b: any) => a.createdAt - b.createdAt);
+}
+
+export const listByProject = query({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return [];
+    const comments = await ctx.db
+      .query("comments")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    return enrichComments(ctx, comments);
+  },
+});
+
 export const listByTask = query({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
     if (!user) return [];
-
     const comments = await ctx.db
       .query("comments")
       .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .order("asc")
       .collect();
+    return enrichComments(ctx, comments);
+  },
+});
 
-    const enriched = await Promise.all(
-      comments.map(async (comment) => {
-        const author = await ctx.db.get(comment.authorId);
-        return {
-          ...comment,
-          authorName: author?.name ?? "Unknown",
-          authorImage: author?.imageUrl,
-        };
-      })
-    );
+export const listBySubtask = query({
+  args: { subtaskId: v.id("subtasks") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return [];
+    const comments = await ctx.db
+      .query("comments")
+      .withIndex("by_subtask", (q) => q.eq("subtaskId", args.subtaskId))
+      .collect();
+    return enrichComments(ctx, comments);
+  },
+});
 
-    // Build threaded structure
-    const topLevel = enriched.filter((c) => !c.parentId);
-    const replies = enriched.filter((c) => c.parentId);
-
-    return topLevel.map((comment) => ({
-      ...comment,
-      replies: replies.filter((r) => r.parentId === comment._id),
-    }));
+export const listByWorkOrder = query({
+  args: { workOrderId: v.id("workOrders") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return [];
+    const comments = await ctx.db
+      .query("comments")
+      .withIndex("by_work_order", (q) => q.eq("workOrderId", args.workOrderId))
+      .collect();
+    return enrichComments(ctx, comments);
   },
 });
 
@@ -50,8 +82,11 @@ export const commentCount = query({
 
 export const create = mutation({
   args: {
-    taskId: v.id("tasks"),
     content: v.string(),
+    projectId: v.optional(v.id("projects")),
+    taskId: v.optional(v.id("tasks")),
+    subtaskId: v.optional(v.id("subtasks")),
+    workOrderId: v.optional(v.id("workOrders")),
     parentId: v.optional(v.id("comments")),
   },
   handler: async (ctx, args) => {
@@ -59,35 +94,40 @@ export const create = mutation({
     if (!user) throw new Error("Not authenticated");
 
     await ctx.db.insert("comments", {
-      taskId: args.taskId,
-      authorId: user._id,
       content: args.content,
+      projectId: args.projectId,
+      taskId: args.taskId,
+      subtaskId: args.subtaskId,
+      workOrderId: args.workOrderId,
       parentId: args.parentId,
+      authorId: user._id,
       createdAt: Date.now(),
     });
 
-    // Notify the task owner if someone else comments
-    const task = await ctx.db.get(args.taskId);
-    if (task && task.ownerId !== user._id) {
-      await createNotification(ctx, {
-        userId: task.ownerId,
-        type: "comment",
-        title: "New comment",
-        message: `${user.name} commented on "${task.title}": ${args.content.slice(0, 60)}${args.content.length > 60 ? "..." : ""}`,
-        linkTo: "/tasks",
-      });
+    // Notify task owner if someone else comments on their task
+    if (args.taskId) {
+      const task = await ctx.db.get(args.taskId);
+      if (task && task.ownerId !== user._id) {
+        await createNotification(ctx, {
+          userId: task.ownerId,
+          type: "comment",
+          title: "New comment",
+          message: `${user.name} commented on "${task.title}": ${args.content.slice(0, 60)}${args.content.length > 60 ? "..." : ""}`,
+          linkTo: task.projectId ? `/projects/${task.projectId}/tasks/${task._id}` : "/tasks",
+        });
+      }
     }
 
-    // If this is a reply, also notify the parent comment author
-    if (args.parentId) {
-      const parentComment = await ctx.db.get(args.parentId);
-      if (parentComment && parentComment.authorId !== user._id && parentComment.authorId !== task?.ownerId) {
+    // Notify project owner if someone else comments on their project
+    if (args.projectId) {
+      const project = await ctx.db.get(args.projectId);
+      if (project && project.ownerId !== user._id) {
         await createNotification(ctx, {
-          userId: parentComment.authorId,
+          userId: project.ownerId,
           type: "comment",
-          title: "Reply to your comment",
-          message: `${user.name} replied: ${args.content.slice(0, 60)}${args.content.length > 60 ? "..." : ""}`,
-          linkTo: "/tasks",
+          title: "New comment",
+          message: `${user.name} commented on "${project.name}": ${args.content.slice(0, 60)}${args.content.length > 60 ? "..." : ""}`,
+          linkTo: `/projects/${project._id}`,
         });
       }
     }
@@ -99,22 +139,9 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
-
     const comment = await ctx.db.get(args.id);
-    if (!comment) throw new Error("Comment not found");
+    if (!comment) throw new Error("Not found");
     if (comment.authorId !== user._id) throw new Error("Not authorized");
-
-    // Delete all replies too
-    const allComments = await ctx.db
-      .query("comments")
-      .withIndex("by_task", (q) => q.eq("taskId", comment.taskId))
-      .collect();
-
-    const replies = allComments.filter((c) => c.parentId === args.id);
-    for (const reply of replies) {
-      await ctx.db.delete(reply._id);
-    }
-
     await ctx.db.delete(args.id);
   },
 });

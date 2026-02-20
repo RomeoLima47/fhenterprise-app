@@ -2,12 +2,17 @@ import { query, mutation, type MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { getCurrentUser } from "./users";
 
-// Helper to create notifications from other files
 export async function createNotification(
   ctx: MutationCtx,
   args: {
     userId: string;
-    type: "task_completed" | "due_soon" | "overdue" | "invitation" | "comment" | "system";
+    type:
+      | "task_completed"
+      | "due_soon"
+      | "overdue"
+      | "invitation"
+      | "comment"
+      | "system";
     title: string;
     message: string;
     linkTo?: string;
@@ -28,14 +33,23 @@ export const list = query({
   handler: async (ctx) => {
     const user = await getCurrentUser(ctx);
     if (!user) return [];
-
-    const notifications = await ctx.db
+    return await ctx.db
       .query("notifications")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .order("desc")
       .take(50);
+  },
+});
 
-    return notifications;
+export const unreadCount = query({
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return 0;
+    const all = await ctx.db
+      .query("notifications")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    return all.filter((n) => !n.read).length;
   },
 });
 
@@ -44,12 +58,8 @@ export const markAsRead = mutation({
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
-
     const notification = await ctx.db.get(args.id);
-    if (!notification || notification.userId !== user._id) {
-      throw new Error("Notification not found");
-    }
-
+    if (!notification || notification.userId !== user._id) throw new Error("Not found");
     await ctx.db.patch(args.id, { read: true });
   },
 });
@@ -59,16 +69,39 @@ export const markAllAsRead = mutation({
   handler: async (ctx) => {
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
-
-    const unread = await ctx.db
+    const all = await ctx.db
       .query("notifications")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
+    for (const n of all.filter((n) => !n.read)) {
+      await ctx.db.patch(n._id, { read: true });
+    }
+  },
+});
 
-    const unreadItems = unread.filter((n) => !n.read);
+export const remove = mutation({
+  args: { id: v.id("notifications") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+    const notification = await ctx.db.get(args.id);
+    if (!notification || notification.userId !== user._id) throw new Error("Not found");
+    await ctx.db.delete(args.id);
+  },
+});
 
-    for (const notification of unreadItems) {
-      await ctx.db.patch(notification._id, { read: true });
+// Delete ALL notifications for the user
+export const clearAll = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+    const all = await ctx.db
+      .query("notifications")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const n of all) {
+      await ctx.db.delete(n._id);
     }
   },
 });

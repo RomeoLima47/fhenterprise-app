@@ -1,7 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getCurrentUser } from "./users";
-import { createNotification } from "./notifications";
 
 export const list = query({
   handler: async (ctx) => {
@@ -11,7 +10,6 @@ export const list = query({
     const ownTasks = await ctx.db
       .query("tasks")
       .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
-      .order("desc")
       .collect();
 
     const memberships = await ctx.db
@@ -23,30 +21,104 @@ export const list = query({
       .filter((m) => m.role !== "owner")
       .map((m) => m.projectId);
 
-    const sharedTasks = [];
+    const sharedTasks: (typeof ownTasks)[number][] = [];
     for (const pid of sharedProjectIds) {
-      const projectTasks = await ctx.db
+      const pt = await ctx.db
         .query("tasks")
         .withIndex("by_project", (q) => q.eq("projectId", pid))
         .collect();
-      sharedTasks.push(...projectTasks);
+      sharedTasks.push(...pt);
     }
 
     const allIds = new Set<string>();
-    const all: (typeof ownTasks[number] & { assigneeName?: string })[] = [];
+    const all: (typeof ownTasks)[number][] = [];
     for (const t of [...ownTasks, ...sharedTasks]) {
       if (!allIds.has(t._id)) {
         allIds.add(t._id);
-        let assigneeName: string | undefined;
-        if (t.assigneeId) {
-          const assignee = await ctx.db.get(t.assigneeId);
-          assigneeName = assignee?.name;
-        }
-        all.push({ ...t, assigneeName });
+        all.push(t);
       }
     }
 
-    return all.sort((a, b) => b.createdAt - a.createdAt);
+    const enriched = await Promise.all(
+      all.map(async (task) => {
+        let assigneeName: string | undefined;
+        if (task.assigneeId) {
+          const assignee = await ctx.db.get(task.assigneeId);
+          assigneeName = (assignee as any)?.name;
+        }
+        const subtasks = await ctx.db
+          .query("subtasks")
+          .withIndex("by_task", (q) => q.eq("taskId", task._id))
+          .collect();
+
+        return {
+          ...task,
+          assigneeName,
+          subtaskCount: subtasks.length,
+          subtaskDone: subtasks.filter((s) => s.status === "done").length,
+        };
+      })
+    );
+
+    return enriched.sort((a, b) => b.createdAt - a.createdAt);
+  },
+});
+
+export const listByProject = query({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return [];
+
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    const enriched = await Promise.all(
+      tasks.map(async (task) => {
+        let assigneeName: string | undefined;
+        if (task.assigneeId) {
+          const assignee = await ctx.db.get(task.assigneeId);
+          assigneeName = (assignee as any)?.name;
+        }
+        const subtasks = await ctx.db
+          .query("subtasks")
+          .withIndex("by_task", (q) => q.eq("taskId", task._id))
+          .collect();
+
+        return {
+          ...task,
+          assigneeName,
+          subtaskCount: subtasks.length,
+          subtaskDone: subtasks.filter((s) => s.status === "done").length,
+        };
+      })
+    );
+
+    return enriched.sort((a, b) => b.createdAt - a.createdAt);
+  },
+});
+
+export const get = query({
+  args: { id: v.id("tasks") },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.id);
+    if (!task) return null;
+
+    let assigneeName: string | undefined;
+    if (task.assigneeId) {
+      const assignee = await ctx.db.get(task.assigneeId);
+      assigneeName = (assignee as any)?.name;
+    }
+
+    let projectName: string | undefined;
+    if (task.projectId) {
+      const project = await ctx.db.get(task.projectId);
+      projectName = (project as any)?.name;
+    }
+
+    return { ...task, assigneeName, projectName };
   },
 });
 
@@ -56,7 +128,8 @@ export const create = mutation({
     description: v.optional(v.string()),
     status: v.union(v.literal("todo"), v.literal("in_progress"), v.literal("done")),
     priority: v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
-    dueDate: v.optional(v.number()),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
     projectId: v.optional(v.id("projects")),
     assigneeId: v.optional(v.id("users")),
   },
@@ -70,16 +143,19 @@ export const create = mutation({
       createdAt: Date.now(),
     });
 
-    // Notify assignee
-    if (args.assigneeId && args.assigneeId !== user._id) {
-      await createNotification(ctx, {
-        userId: args.assigneeId,
-        type: "system",
-        title: "Task assigned",
-        message: `${user.name} assigned you "${args.title}".`,
-        linkTo: "/tasks",
-      });
-    }
+    // Activity log
+    await ctx.db.insert("activityLog", {
+      userId: user._id,
+      userName: user.name,
+      action: "created",
+      entityType: "task",
+      entityId: taskId,
+      entityName: args.title,
+      projectId: args.projectId,
+      createdAt: Date.now(),
+    });
+
+    return taskId;
   },
 });
 
@@ -90,7 +166,9 @@ export const update = mutation({
     description: v.optional(v.string()),
     status: v.optional(v.union(v.literal("todo"), v.literal("in_progress"), v.literal("done"))),
     priority: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))),
-    dueDate: v.optional(v.number()),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    color: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
     assigneeId: v.optional(v.id("users")),
   },
@@ -98,50 +176,43 @@ export const update = mutation({
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
 
+    const task = await ctx.db.get(args.id);
+    if (!task) throw new Error("Task not found");
+
     const { id, ...fields } = args;
-    const existing = await ctx.db.get(id);
-    if (!existing) throw new Error("Task not found");
 
-    let hasAccess = existing.ownerId === user._id;
-    if (!hasAccess && existing.projectId) {
-      const membership = await ctx.db
-        .query("projectMembers")
-        .withIndex("by_project_user", (q) =>
-          q.eq("projectId", existing.projectId!).eq("userId", user._id)
-        )
-        .first();
-      hasAccess = !!membership && membership.role !== "viewer";
-    }
-    if (!hasAccess) throw new Error("Not authorized");
-
-    // Notify on completion
-    if (fields.status === "done" && existing.status !== "done") {
-      let projectName = "";
-      if (existing.projectId) {
-        const project = await ctx.db.get(existing.projectId);
-        projectName = project ? ` in ${project.name}` : "";
+    // Build change details
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined && (task as any)[key] !== value) {
+        changes[key] = { from: (task as any)[key], to: value };
       }
-      await createNotification(ctx, {
-        userId: existing.ownerId,
-        type: "task_completed",
-        title: "Task completed",
-        message: `"${existing.title}"${projectName} has been marked as done.`,
-        linkTo: "/tasks",
-      });
-    }
-
-    // Notify on reassignment
-    if (fields.assigneeId && fields.assigneeId !== existing.assigneeId && fields.assigneeId !== user._id) {
-      await createNotification(ctx, {
-        userId: fields.assigneeId,
-        type: "system",
-        title: "Task assigned",
-        message: `${user.name} assigned you "${existing.title}".`,
-        linkTo: "/tasks",
-      });
     }
 
     await ctx.db.patch(id, fields);
+
+    if (Object.keys(changes).length > 0) {
+      const action = changes.status ? "status_changed"
+        : changes.assigneeId ? "assigned"
+        : (changes.startDate || changes.endDate) ? "moved"
+        : "updated";
+
+      await ctx.db.insert("activityLog", {
+        userId: user._id,
+        userName: user.name,
+        action,
+        entityType: "task",
+        entityId: id,
+        entityName: args.title || task.title,
+        details: JSON.stringify(changes),
+        projectId: task.projectId,
+        taskId: id,
+        createdAt: Date.now(),
+      });
+    }
+
+    // Return old state for undo
+    return { previous: task };
   },
 });
 
@@ -151,20 +222,34 @@ export const remove = mutation({
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
 
-    const existing = await ctx.db.get(args.id);
-    if (!existing) throw new Error("Task not found");
+    const task = await ctx.db.get(args.id);
+    if (!task) throw new Error("Task not found");
 
-    let hasAccess = existing.ownerId === user._id;
-    if (!hasAccess && existing.projectId) {
-      const membership = await ctx.db
-        .query("projectMembers")
-        .withIndex("by_project_user", (q) =>
-          q.eq("projectId", existing.projectId!).eq("userId", user._id)
-        )
-        .first();
-      hasAccess = !!membership && membership.role === "editor";
+    // Activity log
+    await ctx.db.insert("activityLog", {
+      userId: user._id,
+      userName: user.name,
+      action: "deleted",
+      entityType: "task",
+      entityId: args.id,
+      entityName: task.title,
+      projectId: task.projectId,
+      createdAt: Date.now(),
+    });
+
+    const subtasks = await ctx.db
+      .query("subtasks")
+      .withIndex("by_task", (q) => q.eq("taskId", args.id))
+      .collect();
+
+    for (const st of subtasks) {
+      const wos = await ctx.db
+        .query("workOrders")
+        .withIndex("by_subtask", (q) => q.eq("subtaskId", st._id))
+        .collect();
+      for (const wo of wos) await ctx.db.delete(wo._id);
+      await ctx.db.delete(st._id);
     }
-    if (!hasAccess) throw new Error("Not authorized");
 
     await ctx.db.delete(args.id);
   },

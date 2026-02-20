@@ -31,6 +31,7 @@ export function Sidebar() {
     { label: "Tasks", href: "/tasks", icon: "✅", badge: todoCount > 0 ? todoCount : undefined },
     { label: "Board", href: "/board", icon: "📋" },
     { label: "Projects", href: "/projects", icon: "📁" },
+    { label: "Templates", href: "/templates", icon: "📐" },
     { label: "Calendar", href: "/calendar", icon: "📅" },
     { label: "Analytics", href: "/analytics", icon: "📈" },
     { label: "Invitations", href: "/invitations", icon: "📬", badge: inviteCount > 0 ? inviteCount : undefined },

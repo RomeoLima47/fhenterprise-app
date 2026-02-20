@@ -9,8 +9,11 @@
  */
 
 import type * as activity from "../activity.js";
+import type * as activityLog from "../activityLog.js";
 import type * as analytics from "../analytics.js";
 import type * as attachments from "../attachments.js";
+import type * as board from "../board.js";
+import type * as calendar from "../calendar.js";
 import type * as comments from "../comments.js";
 import type * as crons from "../crons.js";
 import type * as invitations from "../invitations.js";
@@ -19,9 +22,13 @@ import type * as notifications from "../notifications.js";
 import type * as overdueChecker from "../overdueChecker.js";
 import type * as projectMembers from "../projectMembers.js";
 import type * as projects from "../projects.js";
+import type * as recentContacts from "../recentContacts.js";
+import type * as subtasks from "../subtasks.js";
 import type * as tasks from "../tasks.js";
 import type * as team from "../team.js";
+import type * as templates from "../templates.js";
 import type * as users from "../users.js";
+import type * as workOrders from "../workOrders.js";
 
 import type {
   ApiFromModules,
@@ -31,8 +38,11 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   activity: typeof activity;
+  activityLog: typeof activityLog;
   analytics: typeof analytics;
   attachments: typeof attachments;
+  board: typeof board;
+  calendar: typeof calendar;
   comments: typeof comments;
   crons: typeof crons;
   invitations: typeof invitations;
@@ -41,9 +51,13 @@ declare const fullApi: ApiFromModules<{
   overdueChecker: typeof overdueChecker;
   projectMembers: typeof projectMembers;
   projects: typeof projects;
+  recentContacts: typeof recentContacts;
+  subtasks: typeof subtasks;
   tasks: typeof tasks;
   team: typeof team;
+  templates: typeof templates;
   users: typeof users;
+  workOrders: typeof workOrders;
 }>;
 
 /**

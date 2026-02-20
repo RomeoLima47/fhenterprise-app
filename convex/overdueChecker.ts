@@ -1,58 +1,44 @@
-import { cronJobs } from "convex/server";
 import { internalMutation } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { createNotification } from "./notifications";
 
 export const checkOverdueTasks = internalMutation({
   handler: async (ctx) => {
     const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
 
-    // Get all tasks with due dates
-    const allTasks = await ctx.db.query("tasks").collect();
+    // Get all users
+    const users = await ctx.db.query("users").collect();
 
-    const overdueTasks = allTasks.filter(
-      (t) => t.dueDate && t.dueDate < now && t.status !== "done"
-    );
-
-    for (const task of overdueTasks) {
-      // Check if we already sent an overdue notification for this task
-      const existingNotifications = await ctx.db
-        .query("notifications")
-        .withIndex("by_user", (q) => q.eq("userId", task.ownerId))
+    for (const user of users) {
+      const tasks = await ctx.db
+        .query("tasks")
+        .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
         .collect();
 
-      const alreadyNotified = existingNotifications.some(
-        (n) =>
-          n.type === "overdue" &&
-          n.message.includes(task.title) &&
-          n.createdAt > now - 24 * 60 * 60 * 1000 // within last 24h
-      );
+      for (const task of tasks) {
+        if (task.status === "done" || !task.endDate) continue;
 
-      if (!alreadyNotified) {
-        let projectName = "";
-        if (task.projectId) {
-          const project = await ctx.db.get(task.projectId);
-          projectName = project ? ` in ${project.name}` : "";
+        // Check if overdue
+        if (task.endDate < now) {
+          await createNotification(ctx, {
+            userId: user._id,
+            type: "overdue",
+            title: "Task overdue",
+            message: `"${task.title}" is past its end date.`,
+            linkTo: task.projectId ? `/projects/${task.projectId}/tasks/${task._id}` : "/tasks",
+          });
         }
-
-        await ctx.db.insert("notifications", {
-          userId: task.ownerId,
-          type: "overdue",
-          title: "Task overdue",
-          message: `"${task.title}"${projectName} is past due.`,
-          linkTo: "/tasks",
-          read: false,
-          createdAt: now,
-        });
+        // Check if due soon (within 24h)
+        else if (task.endDate - now < oneDayMs) {
+          await createNotification(ctx, {
+            userId: user._id,
+            type: "due_soon",
+            title: "Task due soon",
+            message: `"${task.title}" is due within 24 hours.`,
+            linkTo: task.projectId ? `/projects/${task.projectId}/tasks/${task._id}` : "/tasks",
+          });
+        }
       }
     }
   },
 });
-
-const crons = cronJobs();
-crons.interval(
-  "check overdue tasks",
-  { hours: 1 },
-  internal.overdueChecker.checkOverdueTasks
-);
-
-export default crons;

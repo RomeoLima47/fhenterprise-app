@@ -13,36 +13,22 @@ export const recentActivity = query({
       .collect();
 
     const projectIds = memberships.map((m) => m.projectId);
-
-    // Get recent notes from all user's projects
-    const allNotes: {
-      _id: string;
-      content: string;
-      projectId: string;
-      authorId: string;
-      createdAt: number;
-      authorName: string;
-      projectName: string;
-    }[] = [];
+    const allNotes: any[] = [];
 
     for (const pid of projectIds) {
       const notes = await ctx.db
         .query("notes")
         .withIndex("by_project", (q) => q.eq("projectId", pid))
-        .order("desc")
-        .take(5);
+        .collect();
+
+      const project = await ctx.db.get(pid);
 
       for (const note of notes) {
         const author = await ctx.db.get(note.authorId);
-        const project = await ctx.db.get(pid);
         allNotes.push({
-          _id: note._id,
-          content: note.content,
-          projectId: pid,
-          authorId: note.authorId,
-          createdAt: note.createdAt,
-          authorName: author?.name ?? "Unknown",
-          projectName: project?.name ?? "Unknown",
+          ...note,
+          projectName: (project as any)?.name ?? "Unknown",
+          authorName: (author as any)?.name ?? "Unknown",
         });
       }
     }
@@ -58,29 +44,27 @@ export const upcomingDeadlines = query({
     const user = await getCurrentUser(ctx);
     if (!user) return [];
 
-    // Get own tasks
     const ownTasks = await ctx.db
       .query("tasks")
       .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
       .collect();
 
-    // Get shared project tasks
     const memberships = await ctx.db
       .query("projectMembers")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
 
-    const sharedProjectIds = memberships
+    const memberProjectIds = memberships
       .filter((m) => m.role !== "owner")
       .map((m) => m.projectId);
 
     const sharedTasks: (typeof ownTasks)[number][] = [];
-    for (const pid of sharedProjectIds) {
-      const projectTasks = await ctx.db
+    for (const pid of memberProjectIds) {
+      const pt = await ctx.db
         .query("tasks")
         .withIndex("by_project", (q) => q.eq("projectId", pid))
         .collect();
-      sharedTasks.push(...projectTasks);
+      sharedTasks.push(...pt);
     }
 
     const allIds = new Set<string>();
@@ -92,24 +76,28 @@ export const upcomingDeadlines = query({
       }
     }
 
-    // Filter to tasks with due dates that aren't done, sort by due date
-    const withDeadlines = all
-      .filter((t) => t.dueDate && t.status !== "done")
-      .sort((a, b) => (a.dueDate ?? 0) - (b.dueDate ?? 0))
-      .slice(0, 8);
+    // Tasks with endDate that aren't done
+    const upcoming = all.filter((t) => t.endDate && t.status !== "done");
 
-    // Enrich with project names
     const enriched = await Promise.all(
-      withDeadlines.map(async (task) => {
+      upcoming.map(async (t) => {
         let projectName: string | undefined;
-        if (task.projectId) {
-          const project = await ctx.db.get(task.projectId);
-          projectName = project?.name;
+        if (t.projectId) {
+          const project = await ctx.db.get(t.projectId);
+          projectName = (project as any)?.name;
         }
-        return { ...task, projectName };
+        return {
+          _id: t._id,
+          title: t.title,
+          endDate: t.endDate!,
+          status: t.status,
+          priority: t.priority,
+          projectName,
+          projectId: t.projectId,
+        };
       })
     );
 
-    return enriched;
+    return enriched.sort((a, b) => a.endDate - b.endDate).slice(0, 8);
   },
 });

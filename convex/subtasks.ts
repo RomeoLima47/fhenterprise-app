@@ -1,0 +1,206 @@
+import { query, mutation } from "./_generated/server";
+import { v } from "convex/values";
+import { getCurrentUser } from "./users";
+
+export const listByTask = query({
+  args: { taskId: v.id("tasks") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return [];
+
+    const subtasks = await ctx.db
+      .query("subtasks")
+      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+      .collect();
+
+    const enriched = await Promise.all(
+      subtasks.map(async (st) => {
+        let assigneeName: string | undefined;
+        if (st.assigneeId) {
+          const assignee = await ctx.db.get(st.assigneeId);
+          assigneeName = (assignee as any)?.name;
+        }
+        const workOrders = await ctx.db
+          .query("workOrders")
+          .withIndex("by_subtask", (q) => q.eq("subtaskId", st._id))
+          .collect();
+
+        return {
+          ...st,
+          assigneeName,
+          workOrderCount: workOrders.length,
+          workOrderDone: workOrders.filter((w) => w.status === "done").length,
+        };
+      })
+    );
+
+    return enriched.sort((a, b) => a.order - b.order);
+  },
+});
+
+export const get = query({
+  args: { id: v.id("subtasks") },
+  handler: async (ctx, args) => {
+    const subtask = await ctx.db.get(args.id);
+    if (!subtask) return null;
+
+    let assigneeName: string | undefined;
+    if (subtask.assigneeId) {
+      const assignee = await ctx.db.get(subtask.assigneeId);
+      assigneeName = (assignee as any)?.name;
+    }
+
+    const task = await ctx.db.get(subtask.taskId);
+
+    return { ...subtask, assigneeName, taskTitle: (task as any)?.title ?? "Unknown" };
+  },
+});
+
+export const create = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    title: v.string(),
+    description: v.optional(v.string()),
+    assigneeId: v.optional(v.id("users")),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+
+    const existing = await ctx.db
+      .query("subtasks")
+      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+      .collect();
+
+    const maxOrder = existing.length > 0
+      ? Math.max(...existing.map((s) => s.order))
+      : -1;
+
+    const subtaskId = await ctx.db.insert("subtasks", {
+      taskId: args.taskId,
+      title: args.title,
+      description: args.description,
+      status: "todo",
+      assigneeId: args.assigneeId,
+      startDate: args.startDate,
+      endDate: args.endDate,
+      order: maxOrder + 1,
+      createdAt: Date.now(),
+    });
+
+    // Activity log
+    const task = await ctx.db.get(args.taskId);
+    await ctx.db.insert("activityLog", {
+      userId: user._id,
+      userName: user.name,
+      action: "created",
+      entityType: "subtask",
+      entityId: subtaskId,
+      entityName: args.title,
+      taskId: args.taskId,
+      projectId: (task as any)?.projectId,
+      createdAt: Date.now(),
+    });
+
+    return subtaskId;
+  },
+});
+
+export const update = mutation({
+  args: {
+    id: v.id("subtasks"),
+    title: v.optional(v.string()),
+    description: v.optional(v.string()),
+    status: v.optional(v.union(v.literal("todo"), v.literal("in_progress"), v.literal("done"))),
+    assigneeId: v.optional(v.id("users")),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    order: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+
+    const subtask = await ctx.db.get(args.id);
+    if (!subtask) throw new Error("Subtask not found");
+
+    const { id, ...fields } = args;
+
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined && (subtask as any)[key] !== value) {
+        changes[key] = { from: (subtask as any)[key], to: value };
+      }
+    }
+
+    await ctx.db.patch(id, fields);
+
+    if (Object.keys(changes).length > 0) {
+      const task = await ctx.db.get(subtask.taskId);
+      const action = changes.status ? "status_changed" : "updated";
+      await ctx.db.insert("activityLog", {
+        userId: user._id,
+        userName: user.name,
+        action,
+        entityType: "subtask",
+        entityId: id,
+        entityName: args.title || subtask.title,
+        details: JSON.stringify(changes),
+        taskId: subtask.taskId,
+        projectId: (task as any)?.projectId,
+        createdAt: Date.now(),
+      });
+    }
+
+    return { previous: subtask };
+  },
+});
+
+export const remove = mutation({
+  args: { id: v.id("subtasks") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+
+    const subtask = await ctx.db.get(args.id);
+    if (!subtask) throw new Error("Subtask not found");
+
+    const task = await ctx.db.get(subtask.taskId);
+    await ctx.db.insert("activityLog", {
+      userId: user._id,
+      userName: user.name,
+      action: "deleted",
+      entityType: "subtask",
+      entityId: args.id,
+      entityName: subtask.title,
+      taskId: subtask.taskId,
+      projectId: (task as any)?.projectId,
+      createdAt: Date.now(),
+    });
+
+    const workOrders = await ctx.db
+      .query("workOrders")
+      .withIndex("by_subtask", (q) => q.eq("subtaskId", args.id))
+      .collect();
+    for (const wo of workOrders) await ctx.db.delete(wo._id);
+
+    await ctx.db.delete(args.id);
+  },
+});
+
+export const countByTask = query({
+  args: { taskId: v.id("tasks") },
+  handler: async (ctx, args) => {
+    const subtasks = await ctx.db
+      .query("subtasks")
+      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+      .collect();
+
+    return {
+      total: subtasks.length,
+      completed: subtasks.filter((s) => s.status === "done").length,
+    };
+  },
+});

@@ -10,25 +10,57 @@ export default defineSchema({
     createdAt: v.optional(v.number()),
   }).index("by_clerk_id", ["clerkId"])
     .index("by_email", ["email"]),
+
+  projects: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    status: v.union(v.literal("active"), v.literal("archived")),
+    ownerId: v.id("users"),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    color: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_owner", ["ownerId"]),
+
   tasks: defineTable({
     title: v.string(),
     description: v.optional(v.string()),
     status: v.union(v.literal("todo"), v.literal("in_progress"), v.literal("done")),
     priority: v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
-    dueDate: v.optional(v.number()),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    color: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
     assigneeId: v.optional(v.id("users")),
     ownerId: v.id("users"),
     createdAt: v.number(),
   }).index("by_owner", ["ownerId"])
     .index("by_project", ["projectId"]),
-  projects: defineTable({
-    name: v.string(),
+
+  subtasks: defineTable({
+    taskId: v.id("tasks"),
+    title: v.string(),
     description: v.optional(v.string()),
-    status: v.union(v.literal("active"), v.literal("archived")),
-    ownerId: v.id("users"),
+    status: v.union(v.literal("todo"), v.literal("in_progress"), v.literal("done")),
+    assigneeId: v.optional(v.id("users")),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    order: v.number(),
     createdAt: v.number(),
-  }).index("by_owner", ["ownerId"]),
+  }).index("by_task", ["taskId"]),
+
+  workOrders: defineTable({
+    subtaskId: v.id("subtasks"),
+    title: v.string(),
+    description: v.optional(v.string()),
+    status: v.union(v.literal("todo"), v.literal("in_progress"), v.literal("done")),
+    assigneeId: v.optional(v.id("users")),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    order: v.number(),
+    createdAt: v.number(),
+  }).index("by_subtask", ["subtaskId"]),
+
   projectMembers: defineTable({
     projectId: v.id("projects"),
     userId: v.id("users"),
@@ -37,6 +69,7 @@ export default defineSchema({
   }).index("by_project", ["projectId"])
     .index("by_user", ["userId"])
     .index("by_project_user", ["projectId", "userId"]),
+
   invitations: defineTable({
     projectId: v.id("projects"),
     email: v.string(),
@@ -46,12 +79,23 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_project", ["projectId"])
     .index("by_email", ["email"]),
+
+  recentContacts: defineTable({
+    userId: v.id("users"),
+    email: v.string(),
+    name: v.optional(v.string()),
+    isFavorite: v.boolean(),
+    lastUsedAt: v.number(),
+  }).index("by_user", ["userId"])
+    .index("by_user_email", ["userId", "email"]),
+
   notes: defineTable({
     content: v.string(),
     projectId: v.id("projects"),
     authorId: v.id("users"),
     createdAt: v.number(),
   }).index("by_project", ["projectId"]),
+
   notifications: defineTable({
     userId: v.id("users"),
     type: v.union(
@@ -68,22 +112,67 @@ export default defineSchema({
     read: v.boolean(),
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
+
   comments: defineTable({
-    taskId: v.id("tasks"),
+    projectId: v.optional(v.id("projects")),
+    taskId: v.optional(v.id("tasks")),
+    subtaskId: v.optional(v.id("subtasks")),
+    workOrderId: v.optional(v.id("workOrders")),
     authorId: v.id("users"),
     content: v.string(),
     parentId: v.optional(v.id("comments")),
     createdAt: v.number(),
-  }).index("by_task", ["taskId"]),
+  }).index("by_project", ["projectId"])
+    .index("by_task", ["taskId"])
+    .index("by_subtask", ["subtaskId"])
+    .index("by_work_order", ["workOrderId"]),
+
   attachments: defineTable({
     storageId: v.id("_storage"),
     fileName: v.string(),
     fileSize: v.number(),
     fileType: v.string(),
     taskId: v.optional(v.id("tasks")),
+    subtaskId: v.optional(v.id("subtasks")),
+    workOrderId: v.optional(v.id("workOrders")),
     projectId: v.optional(v.id("projects")),
     uploadedBy: v.id("users"),
     createdAt: v.number(),
   }).index("by_task", ["taskId"])
+    .index("by_subtask", ["subtaskId"])
+    .index("by_work_order", ["workOrderId"])
     .index("by_project", ["projectId"]),
+
+  // ─── TEMPLATES ──────────────────────────────────────────
+  templates: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    ownerId: v.id("users"),
+    // Snapshot of the full structure stored as JSON
+    structure: v.string(), // JSON: { tasks: [{ title, description, priority, subtasks: [{ title, description, workOrders: [{ title, description }] }] }] }
+    taskCount: v.number(),
+    subtaskCount: v.number(),
+    workOrderCount: v.number(),
+    sourceProjectId: v.optional(v.id("projects")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_owner", ["ownerId"]),
+
+  // ─── ACTIVITY LOG ───────────────────────────────────────
+  activityLog: defineTable({
+    userId: v.id("users"),
+    userName: v.string(),
+    action: v.string(), // "created", "updated", "deleted", "status_changed", "moved", "cloned", "assigned"
+    entityType: v.string(), // "project", "task", "subtask", "workOrder", "template"
+    entityId: v.string(),
+    entityName: v.string(),
+    details: v.optional(v.string()), // JSON with changed fields, old/new values
+    // Optional parent context
+    projectId: v.optional(v.id("projects")),
+    taskId: v.optional(v.id("tasks")),
+    createdAt: v.number(),
+  }).index("by_project", ["projectId"])
+    .index("by_task", ["taskId"])
+    .index("by_entity", ["entityType", "entityId"])
+    .index("by_user", ["userId"]),
 });
