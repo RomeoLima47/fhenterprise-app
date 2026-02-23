@@ -41,6 +41,12 @@ const entityIcons: Record<string, string> = {
   workOrder: "🔧",
 };
 
+const entityLabels: Record<string, string> = {
+  task: "Task",
+  subtask: "Subtask",
+  workOrder: "Work Order",
+};
+
 const entityColors: Record<string, string> = {
   task: "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200",
   subtask: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
@@ -51,14 +57,16 @@ function formatDate(ts: number) {
   return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function fmtShort(ts: number) {
+  return new Date(ts).toISOString().slice(0, 10);
+}
+
 /** Sort items: soonest upcoming endDate first, then startDate, then no-date last */
 function dateSortKey(item: { endDate?: number; startDate?: number }): number {
   const now = Date.now();
-  // Prefer endDate, fallback to startDate
   const date = item.endDate ?? item.startDate;
-  if (!date) return Number.MAX_SAFE_INTEGER; // no date → bottom
-  // Upcoming dates first (closest to now), then past dates
-  return date >= now ? date : date + 1e15; // push past dates after all future ones
+  if (!date) return Number.MAX_SAFE_INTEGER;
+  return date >= now ? date : date + 1e15;
 }
 
 export default function BoardPage() {
@@ -71,6 +79,8 @@ export default function BoardPage() {
   const updateWorkOrder = useMutation(api.workOrders.update);
   const createTask = useMutation(api.tasks.create);
   const deleteTask = useMutation(api.tasks.remove);
+  const deleteSubtask = useMutation(api.subtasks.remove);
+  const deleteWorkOrder = useMutation(api.workOrders.remove);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createColumn, setCreateColumn] = useState<string>("todo");
@@ -83,6 +93,82 @@ export default function BoardPage() {
   const [filterType, setFilterType] = useState<string>("all");
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
+  // Inline edit state
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editStartDate, setEditStartDate] = useState("");
+  const [editEndDate, setEditEndDate] = useState("");
+  const [editPriority, setEditPriority] = useState<"low" | "medium" | "high">("medium");
+
+  // ─── EXPAND/EDIT HELPERS ──────────────────────────────────
+
+  const startEditing = (item: {
+    _id: string;
+    title: string;
+    description?: string;
+    startDate?: number;
+    endDate?: number;
+    priority?: string;
+  }) => {
+    setExpandedItem(item._id);
+    setEditTitle(item.title);
+    setEditDesc(item.description ?? "");
+    setEditStartDate(item.startDate ? fmtShort(item.startDate) : "");
+    setEditEndDate(item.endDate ? fmtShort(item.endDate) : "");
+    setEditPriority((item.priority as "low" | "medium" | "high") ?? "medium");
+  };
+
+  const cancelEdit = () => {
+    setExpandedItem(null);
+  };
+
+  const saveEdit = async (item: { _id: string; entityType: string }) => {
+    const startTs = editStartDate ? new Date(editStartDate + "T12:00:00").getTime() : undefined;
+    const endTs = editEndDate ? new Date(editEndDate + "T12:00:00").getTime() : undefined;
+
+    if (item.entityType === "task") {
+      await updateTask({
+        id: item._id as Id<"tasks">,
+        title: editTitle || undefined,
+        description: editDesc || undefined,
+        priority: editPriority,
+        startDate: startTs,
+        endDate: endTs,
+      });
+    } else if (item.entityType === "subtask") {
+      await updateSubtask({
+        id: item._id as Id<"subtasks">,
+        title: editTitle || undefined,
+        description: editDesc || undefined,
+        startDate: startTs,
+        endDate: endTs,
+      });
+    } else if (item.entityType === "workOrder") {
+      await updateWorkOrder({
+        id: item._id as Id<"workOrders">,
+        title: editTitle || undefined,
+        description: editDesc || undefined,
+        startDate: startTs,
+        endDate: endTs,
+      });
+    }
+
+    toast(`${entityIcons[item.entityType]} "${editTitle}" updated`);
+    setExpandedItem(null);
+  };
+
+  const handleDelete = async (item: { _id: string; entityType: string; title: string }) => {
+    if (item.entityType === "task") {
+      await deleteTask({ id: item._id as Id<"tasks"> });
+    } else if (item.entityType === "subtask") {
+      await deleteSubtask({ id: item._id as Id<"subtasks"> });
+    } else if (item.entityType === "workOrder") {
+      await deleteWorkOrder({ id: item._id as Id<"workOrders"> });
+    }
+    toast(`${entityIcons[item.entityType]} "${item.title}" deleted`);
+    if (expandedItem === item._id) setExpandedItem(null);
+  };
+
   // ─── DRAG-AND-DROP STATUS UPDATE ──────────────────────────
 
   const handleDragEnd = async (result: DropResult) => {
@@ -90,7 +176,6 @@ export default function BoardPage() {
     const itemId = result.draggableId;
     const newStatus = result.destination.droppableId as "todo" | "in_progress" | "done";
 
-    // Determine entity type from the dragged item
     const item = boardItems?.find((i) => i._id === itemId);
     if (!item) return;
 
@@ -260,96 +345,245 @@ export default function BoardPage() {
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
-                                className={`rounded-md border bg-card p-3 shadow-sm transition-shadow ${
+                                className={`rounded-md border bg-card shadow-sm transition-shadow ${
                                   snapshot.isDragging ? "shadow-lg ring-2 ring-primary/20" : "hover:shadow-md"
                                 } ${isExpanded ? "ring-2 ring-primary/30" : ""}`}
                               >
-                                {/* Card header */}
-                                <div className="mb-1.5 flex items-start justify-between">
-                                  <div className="min-w-0 flex-1">
-                                    <p
-                                      className={`cursor-pointer text-sm font-medium leading-snug ${
-                                        item.status === "done" ? "text-muted-foreground line-through" : ""
-                                      }`}
-                                      onClick={() => setExpandedItem(isExpanded ? null : item._id)}
-                                      title={isExpanded ? "Collapse" : "Click to expand"}
-                                    >
-                                      {item.title}
-                                    </p>
-                                    {/* Parent breadcrumb */}
-                                    {item.parentName && (
-                                      <p className="mt-0.5 truncate text-[10px] text-muted-foreground" title={
-                                        item.grandparentName
-                                          ? `Task: ${item.grandparentName} → Subtask: ${item.parentName}`
-                                          : `Task: ${item.parentName}`
-                                      }>
-                                        {item.grandparentName && <>{item.grandparentName} → </>}
-                                        {item.parentName}
+                                {/* ─── Card header (always visible) ─── */}
+                                <div className="p-3">
+                                  <div className="mb-1.5 flex items-start justify-between">
+                                    <div className="min-w-0 flex-1">
+                                      <p
+                                        className={`cursor-pointer text-sm font-medium leading-snug ${
+                                          item.status === "done" ? "text-muted-foreground line-through" : ""
+                                        }`}
+                                        onClick={() => {
+                                          if (isExpanded) { cancelEdit(); } else { startEditing(item); }
+                                        }}
+                                        title={isExpanded ? "Collapse" : "Click to expand & edit"}
+                                      >
+                                        {item.title}
                                       </p>
+                                      {/* Parent breadcrumb */}
+                                      {item.parentName && (
+                                        <p className="mt-0.5 truncate text-[10px] text-muted-foreground" title={
+                                          item.grandparentName
+                                            ? `Task: ${item.grandparentName} → Subtask: ${item.parentName}`
+                                            : `Task: ${item.parentName}`
+                                        }>
+                                          {item.grandparentName && <>{item.grandparentName} → </>}
+                                          {item.parentName}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                                      {item.entityType === "task" && item.projectId && (
+                                        <button onClick={() => router.push(`/projects/${item.projectId}`)} className="text-[10px] text-muted-foreground hover:text-primary" title="View project">→</button>
+                                      )}
+                                      <button onClick={() => handleDelete(item)} className="text-xs text-muted-foreground hover:text-red-500" title={`Delete ${entityLabels[item.entityType].toLowerCase()}`}>×</button>
+                                      <button
+                                        onClick={() => { if (isExpanded) { cancelEdit(); } else { startEditing(item); } }}
+                                        className="text-xs text-muted-foreground"
+                                        title={isExpanded ? "Collapse" : "Expand"}
+                                      >
+                                        {isExpanded ? "▾" : "▸"}
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Description (collapsed view) */}
+                                  {!isExpanded && item.description && (
+                                    <p className="mb-2 text-xs text-muted-foreground line-clamp-2">{item.description}</p>
+                                  )}
+
+                                  {/* Metadata badges */}
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <Badge variant="secondary" className={`text-[10px] ${entityColors[item.entityType]}`} title={`Type: ${entityLabels[item.entityType]}`}>
+                                      {entityIcons[item.entityType]} {item.entityType === "workOrder" ? "WO" : item.entityType}
+                                    </Badge>
+
+                                    {item.priority && (
+                                      <>
+                                        <span className={`inline-block h-2 w-2 rounded-full ${priorityDots[item.priority]}`} title={`${item.priority} priority`} />
+                                        <Badge variant="secondary" className={`text-[10px] ${priorityColors[item.priority]}`} title="Priority">
+                                          {item.priority}
+                                        </Badge>
+                                      </>
+                                    )}
+
+                                    {item.projectName && (
+                                      <span className="text-[10px] text-muted-foreground" title="Project">📁 {item.projectName}</span>
+                                    )}
+
+                                    {item.assigneeName && (
+                                      <span className="text-[10px] text-muted-foreground" title="Assigned to">👤 {item.assigneeName}</span>
+                                    )}
+
+                                    {item.endDate && (
+                                      <span className={`text-[10px] ${overdue ? "font-medium text-red-500" : "text-muted-foreground"}`} title={overdue ? "Overdue!" : "End date"}>
+                                        📅 {formatDate(item.endDate)}
+                                      </span>
+                                    )}
+
+                                    {!item.endDate && item.startDate && (
+                                      <span className="text-[10px] text-muted-foreground" title="Start date">
+                                        🗓️ {formatDate(item.startDate)}
+                                      </span>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                                    {item.entityType === "task" && item.projectId && (
-                                      <button onClick={() => router.push(`/projects/${item.projectId}`)} className="text-[10px] text-muted-foreground hover:text-primary" title="View project">→</button>
-                                    )}
+                                </div>
+
+                                {/* ─── Expanded edit form (ALL entity types) ─── */}
+                                {isExpanded && (
+                                  <div className="border-t px-3 pb-3 pt-2 space-y-3">
+                                    {/* Status */}
+                                    <div>
+                                      <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Status</label>
+                                      <div className="flex gap-1">
+                                        {columns.map((col) => (
+                                          <button
+                                            key={col.id}
+                                            onClick={async () => {
+                                              const newStatus = col.id as "todo" | "in_progress" | "done";
+                                              if (item.entityType === "task") {
+                                                await updateTask({ id: item._id as Id<"tasks">, status: newStatus });
+                                              } else if (item.entityType === "subtask") {
+                                                await updateSubtask({ id: item._id as Id<"subtasks">, status: newStatus });
+                                              } else if (item.entityType === "workOrder") {
+                                                await updateWorkOrder({ id: item._id as Id<"workOrders">, status: newStatus });
+                                              }
+                                              toast("Status updated");
+                                            }}
+                                            className={`rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                                              item.status === col.id
+                                                ? "border-primary bg-primary/10 text-primary"
+                                                : "border-transparent text-muted-foreground hover:bg-muted"
+                                            }`}
+                                            title={`Set status to ${col.label}`}
+                                          >
+                                            {col.label}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {/* Title */}
+                                    <div>
+                                      <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                                        {entityLabels[item.entityType]} Title
+                                      </label>
+                                      <Input
+                                        value={editTitle}
+                                        onChange={(e) => setEditTitle(e.target.value)}
+                                        className="h-8 text-sm"
+                                        title="Edit title"
+                                      />
+                                    </div>
+
+                                    {/* Description */}
+                                    <div>
+                                      <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Description</label>
+                                      <textarea
+                                        value={editDesc}
+                                        onChange={(e) => setEditDesc(e.target.value)}
+                                        className="w-full rounded-md border bg-transparent px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                        rows={2}
+                                        placeholder="Add a description..."
+                                        title="Edit description"
+                                      />
+                                    </div>
+
+                                    {/* Priority (tasks only) */}
                                     {item.entityType === "task" && (
-                                      <button onClick={() => deleteTask({ id: item._id as Id<"tasks"> })} className="text-xs text-muted-foreground hover:text-red-500" title="Delete task">×</button>
+                                      <div>
+                                        <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Priority</label>
+                                        <div className="flex gap-1">
+                                          {(["low", "medium", "high"] as const).map((p) => (
+                                            <button
+                                              key={p}
+                                              onClick={() => setEditPriority(p)}
+                                              className={`rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                                                editPriority === p
+                                                  ? `border-primary ${priorityColors[p]}`
+                                                  : "border-transparent text-muted-foreground hover:bg-muted"
+                                              }`}
+                                              title={`Set priority to ${p}`}
+                                            >
+                                              {p === "high" ? "🔴" : p === "medium" ? "🟡" : "🔵"} {p}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
                                     )}
-                                  </div>
-                                </div>
 
-                                {/* Description */}
-                                {item.description && (
-                                  <p className="mb-2 text-xs text-muted-foreground line-clamp-2">{item.description}</p>
-                                )}
+                                    {/* Date range */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div>
+                                        <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Start Date</label>
+                                        <Input
+                                          type="date"
+                                          value={editStartDate}
+                                          onChange={(e) => setEditStartDate(e.target.value)}
+                                          className="h-8 text-sm"
+                                          title="Start date"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="mb-1 block text-[11px] font-medium text-muted-foreground">End Date</label>
+                                        <Input
+                                          type="date"
+                                          value={editEndDate}
+                                          onChange={(e) => setEditEndDate(e.target.value)}
+                                          className="h-8 text-sm"
+                                          title="End date"
+                                        />
+                                      </div>
+                                    </div>
 
-                                {/* Metadata badges */}
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  {/* Entity type badge */}
-                                  <Badge variant="secondary" className={`text-[10px] ${entityColors[item.entityType]}`} title={`Type: ${item.entityType}`}>
-                                    {entityIcons[item.entityType]} {item.entityType === "workOrder" ? "WO" : item.entityType}
-                                  </Badge>
+                                    {/* Context info */}
+                                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                      {item.projectName && <span title="Project">📁 {item.projectName}</span>}
+                                      {item.parentName && (
+                                        <span title="Parent">
+                                          ↳ {item.parentName}
+                                          {item.grandparentName && <span className="text-muted-foreground/60"> (in {item.grandparentName})</span>}
+                                        </span>
+                                      )}
+                                      {item.assigneeName && <span title="Assigned to">👤 {item.assigneeName}</span>}
+                                    </div>
 
-                                  {/* Priority (tasks only) */}
-                                  {item.priority && (
-                                    <>
-                                      <span className={`inline-block h-2 w-2 rounded-full ${priorityDots[item.priority]}`} title={`${item.priority} priority`} />
-                                      <Badge variant="secondary" className={`text-[10px] ${priorityColors[item.priority]}`} title="Priority">
-                                        {item.priority}
-                                      </Badge>
-                                    </>
-                                  )}
+                                    {/* Save / Cancel / Delete */}
+                                    <div className="flex items-center gap-2">
+                                      <Button size="sm" className="h-7 text-xs" onClick={() => saveEdit(item)} title="Save changes">
+                                        💾 Save
+                                      </Button>
+                                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={cancelEdit} title="Cancel editing">
+                                        Cancel
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="ml-auto h-7 text-xs text-red-500 hover:text-red-700"
+                                        onClick={() => handleDelete(item)}
+                                        title={`Delete ${entityLabels[item.entityType].toLowerCase()}`}
+                                      >
+                                        🗑️ Delete
+                                      </Button>
+                                    </div>
 
-                                  {/* Project name */}
-                                  {item.projectName && (
-                                    <span className="text-[10px] text-muted-foreground" title="Project">📁 {item.projectName}</span>
-                                  )}
-
-                                  {/* Assignee */}
-                                  {item.assigneeName && (
-                                    <span className="text-[10px] text-muted-foreground" title="Assigned to">👤 {item.assigneeName}</span>
-                                  )}
-
-                                  {/* End date */}
-                                  {item.endDate && (
-                                    <span className={`text-[10px] ${overdue ? "font-medium text-red-500" : "text-muted-foreground"}`} title={overdue ? "Overdue!" : "End date"}>
-                                      📅 {formatDate(item.endDate)}
-                                    </span>
-                                  )}
-
-                                  {/* Start date (if no end date) */}
-                                  {!item.endDate && item.startDate && (
-                                    <span className="text-[10px] text-muted-foreground" title="Start date">
-                                      🗓️ {formatDate(item.startDate)}
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* Expanded: comments + files (tasks only) */}
-                                {isExpanded && item.entityType === "task" && (
-                                  <div className="mt-2 space-y-2 border-t pt-2">
-                                    <CommentsSection taskId={item._id as Id<"tasks">} compact />
-                                    <FileAttachments taskId={item._id as Id<"tasks">} compact />
+                                    {/* Comments & Files (tasks only — subtasks/workOrders don't have comment/file associations) */}
+                                    {item.entityType === "task" && (
+                                      <div className="grid gap-3 sm:grid-cols-2">
+                                        <div>
+                                          <p className="mb-1 text-[11px] font-medium text-muted-foreground">💬 Comments</p>
+                                          <CommentsSection taskId={item._id as Id<"tasks">} compact />
+                                        </div>
+                                        <div>
+                                          <p className="mb-1 text-[11px] font-medium text-muted-foreground">📎 Files</p>
+                                          <FileAttachments taskId={item._id as Id<"tasks">} compact />
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
