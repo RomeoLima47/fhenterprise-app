@@ -92,6 +92,7 @@ export default function BoardPage() {
   const [filterProject, setFilterProject] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [sortAsc, setSortAsc] = useState(true); // true = ascending (soonest first), false = descending
 
   // Inline edit state
   const [editTitle, setEditTitle] = useState("");
@@ -214,17 +215,24 @@ export default function BoardPage() {
 
   const filteredItems = useMemo(() => {
     if (!boardItems) return [];
-    return boardItems
-      .filter((item) => {
-        if (filterProject !== "all") {
-          if (filterProject === "none" && item.projectId) return false;
-          if (filterProject !== "none" && item.projectId !== filterProject) return false;
-        }
-        if (filterType !== "all" && item.entityType !== filterType) return false;
-        return true;
-      })
-      .sort((a, b) => dateSortKey(a) - dateSortKey(b));
-  }, [boardItems, filterProject, filterType]);
+    const filtered = boardItems.filter((item) => {
+      if (filterProject !== "all") {
+        if (filterProject === "none" && item.projectId) return false;
+        if (filterProject !== "none" && item.projectId !== filterProject) return false;
+      }
+      if (filterType !== "all" && item.entityType !== filterType) return false;
+      return true;
+    });
+
+    // Sort by date
+    filtered.sort((a, b) => {
+      const keyA = dateSortKey(a);
+      const keyB = dateSortKey(b);
+      return sortAsc ? keyA - keyB : keyB - keyA;
+    });
+
+    return filtered;
+  }, [boardItems, filterProject, filterType, sortAsc]);
 
   const getColumnItems = (status: string) => filteredItems.filter((i) => i.status === status);
 
@@ -258,6 +266,13 @@ export default function BoardPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setSortAsc(!sortAsc)}
+            className="flex h-9 items-center gap-1.5 rounded-md border bg-background px-3 text-sm transition-colors hover:bg-muted"
+            title={sortAsc ? "Sorted: Soonest date first (ascending) — click to reverse" : "Sorted: Latest date first (descending) — click to reverse"}
+          >
+            📅 {sortAsc ? "↑ Soonest" : "↓ Latest"}
+          </button>
           <select
             className="flex h-9 rounded-md border bg-background px-3 py-1.5 text-sm"
             value={filterType}

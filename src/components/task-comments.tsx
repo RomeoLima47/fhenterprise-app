@@ -168,7 +168,7 @@ export function TaskComments({ taskId }: { taskId: Id<"tasks"> }) {
 
               {comment.replies.length > 0 && (
                 <div className="mt-2 space-y-2">
-                  {comment.replies.map((reply) => (
+                  {comment.replies.map((reply: CommentData["replies"][number]) => (
                     <CommentItem
                       key={reply._id}
                       comment={reply}

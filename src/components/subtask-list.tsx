@@ -25,7 +25,7 @@ export function SubtaskList({ taskId, taskTitle, compact = false }: SubtaskListP
   const [isAdding, setIsAdding] = useState(false);
 
   const total = subtasks?.length ?? 0;
-  const completed = subtasks?.filter((s) => s.completed).length ?? 0;
+  const completed = subtasks?.filter((s) => s.status === "done").length ?? 0;
   const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   const handleAdd = async () => {
@@ -84,33 +84,36 @@ export function SubtaskList({ taskId, taskTitle, compact = false }: SubtaskListP
       )}
 
       {/* Subtask items */}
-      {subtasks.map((subtask) => (
-        <div key={subtask._id} className="group flex items-center gap-2">
-          <button
-            onClick={() => handleToggle(subtask._id)}
-            className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-colors ${
-              subtask.completed
-                ? "border-green-500 bg-green-500 text-white"
-                : "border-muted-foreground/40 hover:border-primary"
-            }`}
-          >
-            {subtask.completed && (
-              <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
-                <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
-          </button>
-          <span className={`flex-1 text-sm ${subtask.completed ? "text-muted-foreground line-through" : ""}`}>
-            {subtask.title}
-          </span>
-          <button
-            onClick={() => removeSubtask({ id: subtask._id })}
-            className="hidden h-5 w-5 flex-shrink-0 items-center justify-center rounded text-xs text-muted-foreground hover:bg-muted hover:text-foreground group-hover:flex"
-          >
-            ×
-          </button>
-        </div>
-      ))}
+      {subtasks.map((subtask) => {
+        const isDone = subtask.status === "done";
+        return (
+          <div key={subtask._id} className="group flex items-center gap-2">
+            <button
+              onClick={() => handleToggle(subtask._id)}
+              className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-colors ${
+                isDone
+                  ? "border-green-500 bg-green-500 text-white"
+                  : "border-muted-foreground/40 hover:border-primary"
+              }`}
+            >
+              {isDone && (
+                <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+                  <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
+            <span className={`flex-1 text-sm ${isDone ? "text-muted-foreground line-through" : ""}`}>
+              {subtask.title}
+            </span>
+            <button
+              onClick={() => removeSubtask({ id: subtask._id })}
+              className="hidden h-5 w-5 flex-shrink-0 items-center justify-center rounded text-xs text-muted-foreground hover:bg-muted hover:text-foreground group-hover:flex"
+            >
+              ×
+            </button>
+          </div>
+        );
+      })}
 
       {/* Add new subtask */}
       {isAdding ? (

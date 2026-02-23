@@ -190,6 +190,46 @@ export const remove = mutation({
   },
 });
 
+export const toggle = mutation({
+  args: { id: v.id("subtasks") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+
+    const subtask = await ctx.db.get(args.id);
+    if (!subtask) throw new Error("Subtask not found");
+
+    const newStatus = subtask.status === "done" ? "todo" : "done";
+    await ctx.db.patch(args.id, { status: newStatus });
+
+    const task = await ctx.db.get(subtask.taskId);
+    await ctx.db.insert("activityLog", {
+      userId: user._id,
+      userName: user.name,
+      action: "status_changed",
+      entityType: "subtask",
+      entityId: args.id,
+      entityName: subtask.title,
+      details: JSON.stringify({ status: { from: subtask.status, to: newStatus } }),
+      taskId: subtask.taskId,
+      projectId: (task as any)?.projectId,
+      createdAt: Date.now(),
+    });
+
+    // Check if all subtasks for this task are now done
+    const siblings = await ctx.db
+      .query("subtasks")
+      .withIndex("by_task", (q) => q.eq("taskId", subtask.taskId))
+      .collect();
+
+    const allCompleted = siblings.every((s) =>
+      s._id === args.id ? newStatus === "done" : s.status === "done"
+    );
+
+    return { newStatus, allCompleted };
+  },
+});
+
 export const countByTask = query({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, args) => {
