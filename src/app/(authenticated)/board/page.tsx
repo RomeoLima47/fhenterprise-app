@@ -61,12 +61,11 @@ function fmtShort(ts: number) {
   return new Date(ts).toISOString().slice(0, 10);
 }
 
-/** Sort items: soonest upcoming endDate first, then startDate, then no-date last */
+/** Sort items by date — prefers endDate, falls back to startDate, no-date items go last */
 function dateSortKey(item: { endDate?: number; startDate?: number }): number {
-  const now = Date.now();
   const date = item.endDate ?? item.startDate;
   if (!date) return Number.MAX_SAFE_INTEGER;
-  return date >= now ? date : date + 1e15;
+  return date;
 }
 
 export default function BoardPage() {
