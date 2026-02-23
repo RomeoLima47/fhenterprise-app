@@ -9,6 +9,7 @@ import { api } from "../../convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 import { NotificationBell } from "./notification-bell";
+import { ConnectionDot } from "./offline-indicator";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -31,7 +32,7 @@ export function Sidebar() {
     { label: "Tasks", href: "/tasks", icon: "✅", badge: todoCount > 0 ? todoCount : undefined },
     { label: "Board", href: "/board", icon: "📋" },
     { label: "Projects", href: "/projects", icon: "📁" },
-    { label: "Templates", href: "/templates", icon: "📐" },
+    { label: "Templates", href: "/templates", icon: "📄" },
     { label: "Calendar", href: "/calendar", icon: "📅" },
     { label: "Analytics", href: "/analytics", icon: "📈" },
     { label: "Invitations", href: "/invitations", icon: "📬", badge: inviteCount > 0 ? inviteCount : undefined },
@@ -87,7 +88,10 @@ export function Sidebar() {
 
   const footer = (
     <div className="flex items-center justify-between border-t px-3 py-3">
-      <UserButton afterSignOutUrl="/sign-in" />
+      <div className="flex items-center gap-2">
+        <UserButton afterSignOutUrl="/sign-in" />
+        <ConnectionDot />
+      </div>
       <ThemeToggle />
     </div>
   );
