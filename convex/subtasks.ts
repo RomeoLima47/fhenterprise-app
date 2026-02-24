@@ -78,7 +78,7 @@ export const create = mutation({
       ? Math.max(...existing.map((s) => s.order))
       : -1;
 
-    const subtaskId = await ctx.db.insert("subtasks", {
+    return await ctx.db.insert("subtasks", {
       taskId: args.taskId,
       title: args.title,
       description: args.description,
@@ -89,22 +89,6 @@ export const create = mutation({
       order: maxOrder + 1,
       createdAt: Date.now(),
     });
-
-    // Activity log
-    const task = await ctx.db.get(args.taskId);
-    await ctx.db.insert("activityLog", {
-      userId: user._id,
-      userName: user.name,
-      action: "created",
-      entityType: "subtask",
-      entityId: subtaskId,
-      entityName: args.title,
-      taskId: args.taskId,
-      projectId: (task as any)?.projectId,
-      createdAt: Date.now(),
-    });
-
-    return subtaskId;
   },
 });
 
@@ -123,70 +107,8 @@ export const update = mutation({
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
 
-    const subtask = await ctx.db.get(args.id);
-    if (!subtask) throw new Error("Subtask not found");
-
     const { id, ...fields } = args;
-
-    const changes: Record<string, { from: unknown; to: unknown }> = {};
-    for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined && (subtask as any)[key] !== value) {
-        changes[key] = { from: (subtask as any)[key], to: value };
-      }
-    }
-
     await ctx.db.patch(id, fields);
-
-    if (Object.keys(changes).length > 0) {
-      const task = await ctx.db.get(subtask.taskId);
-      const action = changes.status ? "status_changed" : "updated";
-      await ctx.db.insert("activityLog", {
-        userId: user._id,
-        userName: user.name,
-        action,
-        entityType: "subtask",
-        entityId: id,
-        entityName: args.title || subtask.title,
-        details: JSON.stringify(changes),
-        taskId: subtask.taskId,
-        projectId: (task as any)?.projectId,
-        createdAt: Date.now(),
-      });
-    }
-
-    return { previous: subtask };
-  },
-});
-
-export const remove = mutation({
-  args: { id: v.id("subtasks") },
-  handler: async (ctx, args) => {
-    const user = await getCurrentUser(ctx);
-    if (!user) throw new Error("Not authenticated");
-
-    const subtask = await ctx.db.get(args.id);
-    if (!subtask) throw new Error("Subtask not found");
-
-    const task = await ctx.db.get(subtask.taskId);
-    await ctx.db.insert("activityLog", {
-      userId: user._id,
-      userName: user.name,
-      action: "deleted",
-      entityType: "subtask",
-      entityId: args.id,
-      entityName: subtask.title,
-      taskId: subtask.taskId,
-      projectId: (task as any)?.projectId,
-      createdAt: Date.now(),
-    });
-
-    const workOrders = await ctx.db
-      .query("workOrders")
-      .withIndex("by_subtask", (q) => q.eq("subtaskId", args.id))
-      .collect();
-    for (const wo of workOrders) await ctx.db.delete(wo._id);
-
-    await ctx.db.delete(args.id);
   },
 });
 
@@ -202,21 +124,7 @@ export const toggle = mutation({
     const newStatus = subtask.status === "done" ? "todo" : "done";
     await ctx.db.patch(args.id, { status: newStatus });
 
-    const task = await ctx.db.get(subtask.taskId);
-    await ctx.db.insert("activityLog", {
-      userId: user._id,
-      userName: user.name,
-      action: "status_changed",
-      entityType: "subtask",
-      entityId: args.id,
-      entityName: subtask.title,
-      details: JSON.stringify({ status: { from: subtask.status, to: newStatus } }),
-      taskId: subtask.taskId,
-      projectId: (task as any)?.projectId,
-      createdAt: Date.now(),
-    });
-
-    // Check if all subtasks for this task are now done
+    // Check if all sibling subtasks are now complete
     const siblings = await ctx.db
       .query("subtasks")
       .withIndex("by_task", (q) => q.eq("taskId", subtask.taskId))
@@ -230,6 +138,41 @@ export const toggle = mutation({
   },
 });
 
+export const remove = mutation({
+  args: { id: v.id("subtasks") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+
+    // Delete child work orders
+    const workOrders = await ctx.db
+      .query("workOrders")
+      .withIndex("by_subtask", (q) => q.eq("subtaskId", args.id))
+      .collect();
+    for (const wo of workOrders) await ctx.db.delete(wo._id);
+
+    await ctx.db.delete(args.id);
+  },
+});
+
+// ─── Reorder: update order fields for all subtasks in a task ──
+export const reorder = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    orderedIds: v.array(v.id("subtasks")),
+  },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+
+    // Update each subtask's order to match its index in the array
+    for (let i = 0; i < args.orderedIds.length; i++) {
+      await ctx.db.patch(args.orderedIds[i], { order: i });
+    }
+  },
+});
+
+// Count for badge display
 export const countByTask = query({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, args) => {

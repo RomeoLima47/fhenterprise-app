@@ -50,7 +50,7 @@ export const create = mutation({
       ? Math.max(...existing.map((w) => w.order))
       : -1;
 
-    const woId = await ctx.db.insert("workOrders", {
+    return await ctx.db.insert("workOrders", {
       subtaskId: args.subtaskId,
       title: args.title,
       description: args.description,
@@ -61,29 +61,6 @@ export const create = mutation({
       order: maxOrder + 1,
       createdAt: Date.now(),
     });
-
-    // Activity log — walk up to get projectId
-    const subtask = await ctx.db.get(args.subtaskId);
-    let projectId;
-    let taskId;
-    if (subtask) {
-      taskId = subtask.taskId;
-      const task = await ctx.db.get(subtask.taskId);
-      projectId = (task as any)?.projectId;
-    }
-    await ctx.db.insert("activityLog", {
-      userId: user._id,
-      userName: user.name,
-      action: "created",
-      entityType: "workOrder",
-      entityId: woId,
-      entityName: args.title,
-      taskId,
-      projectId,
-      createdAt: Date.now(),
-    });
-
-    return woId;
   },
 });
 
@@ -101,45 +78,8 @@ export const update = mutation({
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
 
-    const wo = await ctx.db.get(args.id);
-    if (!wo) throw new Error("Work order not found");
-
     const { id, ...fields } = args;
-
-    const changes: Record<string, { from: unknown; to: unknown }> = {};
-    for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined && (wo as any)[key] !== value) {
-        changes[key] = { from: (wo as any)[key], to: value };
-      }
-    }
-
     await ctx.db.patch(id, fields);
-
-    if (Object.keys(changes).length > 0) {
-      const subtask = await ctx.db.get(wo.subtaskId);
-      let projectId;
-      let taskId;
-      if (subtask) {
-        taskId = subtask.taskId;
-        const task = await ctx.db.get(subtask.taskId);
-        projectId = (task as any)?.projectId;
-      }
-      const action = changes.status ? "status_changed" : "updated";
-      await ctx.db.insert("activityLog", {
-        userId: user._id,
-        userName: user.name,
-        action,
-        entityType: "workOrder",
-        entityId: id,
-        entityName: args.title || wo.title,
-        details: JSON.stringify(changes),
-        taskId,
-        projectId,
-        createdAt: Date.now(),
-      });
-    }
-
-    return { previous: wo };
   },
 });
 
@@ -149,30 +89,22 @@ export const remove = mutation({
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
 
-    const wo = await ctx.db.get(args.id);
-    if (!wo) throw new Error("Work order not found");
-
-    const subtask = await ctx.db.get(wo.subtaskId);
-    let projectId;
-    let taskId;
-    if (subtask) {
-      taskId = subtask.taskId;
-      const task = await ctx.db.get(subtask.taskId);
-      projectId = (task as any)?.projectId;
-    }
-
-    await ctx.db.insert("activityLog", {
-      userId: user._id,
-      userName: user.name,
-      action: "deleted",
-      entityType: "workOrder",
-      entityId: args.id,
-      entityName: wo.title,
-      taskId,
-      projectId,
-      createdAt: Date.now(),
-    });
-
     await ctx.db.delete(args.id);
+  },
+});
+
+// ─── Reorder: update order fields for all work orders in a subtask ──
+export const reorder = mutation({
+  args: {
+    subtaskId: v.id("subtasks"),
+    orderedIds: v.array(v.id("workOrders")),
+  },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+
+    for (let i = 0; i < args.orderedIds.length; i++) {
+      await ctx.db.patch(args.orderedIds[i], { order: i });
+    }
   },
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../../../../convex/_generated/api";
@@ -15,14 +15,12 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CommentsSection } from "@/components/comments-section";
 import { FileAttachments } from "@/components/file-attachments";
 import { StatusSelect } from "@/components/status-select";
+import { Breadcrumbs } from "@/components/breadcrumbs";
+import { DragList, DragHandle } from "@/components/drag-list";
+import { TaskDetailSkeleton } from "@/components/skeletons";
 import { useToast } from "@/components/toast";
 import type { Id } from "../../../../../../../convex/_generated/dataModel";
 
-const statusColors: Record<string, string> = {
-  todo: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  in_progress: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-  done: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-};
 const statusIcons: Record<string, string> = { todo: "⬜", in_progress: "🔄", done: "✅" };
 const statusLabels: Record<string, string> = { todo: "To Do — click to start", in_progress: "In Progress — click to complete", done: "Done — click to reopen" };
 
@@ -46,6 +44,7 @@ export default function TaskDetailPage() {
   const createSubtask = useMutation(api.subtasks.create);
   const updateSubtask = useMutation(api.subtasks.update);
   const deleteSubtask = useMutation(api.subtasks.remove);
+  const reorderSubtasks = useMutation(api.subtasks.reorder);
   const createWorkOrder = useMutation(api.workOrders.create);
 
   const [editOpen, setEditOpen] = useState(false);
@@ -142,7 +141,17 @@ export default function TaskDetailPage() {
     setEditSubId(null);
   };
 
-  if (!task) return <div className="flex min-h-[50vh] items-center justify-center"><div className="h-8 w-48 animate-pulse rounded bg-muted" /></div>;
+  // ─── Drag reorder subtasks ────────────────────────────────
+  const handleReorderSubtasks = useCallback((orderedIds: string[]) => {
+    reorderSubtasks({
+      taskId,
+      orderedIds: orderedIds as Id<"subtasks">[],
+    });
+    toast("Subtasks reordered");
+  }, [taskId, reorderSubtasks, toast]);
+
+  // ─── LOADING ──────────────────────────────────────────────
+  if (!task) return <TaskDetailSkeleton />;
 
   const doneSubs = subtasks?.filter((s) => s.status === "done").length ?? 0;
   const totalSubs = subtasks?.length ?? 0;
@@ -154,16 +163,14 @@ export default function TaskDetailPage() {
         title="Delete subtask?" message={`Delete "${deleteSubName}" and all its work orders?`}
         onConfirm={() => { if (deleteSubConfirm) { deleteSubtask({ id: deleteSubConfirm }); toast(`"${deleteSubName}" deleted`); } }} />
 
-      {/* Breadcrumb */}
-      <div className="mb-4 flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
-        <button onClick={() => router.push("/projects")} className="hover:text-foreground" title="All projects">Projects</button>
-        <span>/</span>
-        <button onClick={() => router.push(`/projects/${projectId}`)} className="hover:text-foreground" title="Back to project">{task.projectName ?? "Project"}</button>
-        <span>/</span>
-        <span className="font-medium text-foreground">{task.title}</span>
-      </div>
+      {/* ─── Breadcrumbs ───────────────────────────────────── */}
+      <Breadcrumbs items={[
+        { label: "Projects", href: "/projects" },
+        { label: task.projectName ?? "Project", href: `/projects/${projectId}` },
+        { label: task.title },
+      ]} />
 
-      {/* Task header */}
+      {/* ─── Task header ───────────────────────────────────── */}
       <div className="mb-6 rounded-lg border bg-card p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -207,9 +214,16 @@ export default function TaskDetailPage() {
         </div>
       </div>
 
-      {/* Subtasks section */}
+      {/* ─── Subtasks section ──────────────────────────────── */}
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Subtasks</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold">Subtasks</h2>
+          {subtasks && subtasks.length > 1 && (
+            <span className="text-xs text-muted-foreground" title="Drag the grip handle to reorder">
+              ⠿ drag to reorder
+            </span>
+          )}
+        </div>
         <Dialog open={addSubOpen} onOpenChange={setAddSubOpen}>
           <DialogTrigger asChild>
             <Button size="sm" title="Add a new subtask">+ Add Subtask</Button>
@@ -234,22 +248,27 @@ export default function TaskDetailPage() {
       </div>
 
       {!subtasks ? (
-        <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-14 animate-pulse rounded-lg bg-muted" />)}</div>
+        <TaskDetailSkeleton />
       ) : subtasks.length === 0 ? (
         <Card><CardContent className="py-8 text-center text-muted-foreground"><p className="mb-1 text-2xl">📋</p>No subtasks yet — add one to break down this task.</CardContent></Card>
       ) : (
-        <div className="space-y-2">
-          {subtasks.map((st) => {
+        <DragList
+          items={subtasks}
+          onReorder={handleReorderSubtasks}
+          renderItem={(st, dragHandleProps) => {
             const isExpanded = expandedSubtask === st._id;
             const overdue = st.status !== "done" && st.endDate && st.endDate < Date.now();
             const isEditing = editSubId === st._id;
 
             return (
-              <div key={st._id}>
+              <div>
                 <Card className={`transition-all ${isExpanded ? "ring-2 ring-primary/30" : "hover:shadow-md"}`}>
                   <CardContent className="py-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        {/* Drag handle */}
+                        <DragHandle {...dragHandleProps} />
+
                         <button onClick={() => setExpandedSubtask(isExpanded ? null : st._id)} className="text-lg transition-transform hover:scale-110" title={statusLabels[st.status]}>
                           {statusIcons[st.status]}
                         </button>
@@ -309,8 +328,8 @@ export default function TaskDetailPage() {
                 )}
               </div>
             );
-          })}
-        </div>
+          }}
+        />
       )}
 
       {/* Add work order dialog */}
@@ -356,7 +375,7 @@ export default function TaskDetailPage() {
   );
 }
 
-/* ─── Work Order Section with comments, files, status radio ────────────── */
+/* ─── Work Order Section with drag reorder ─────────────────────────────── */
 
 function WorkOrderSection({ subtaskId, subtaskTitle, onAddWorkOrder }: {
   subtaskId: Id<"subtasks">; subtaskTitle: string; onAddWorkOrder: () => void;
@@ -365,43 +384,69 @@ function WorkOrderSection({ subtaskId, subtaskTitle, onAddWorkOrder }: {
   const workOrders = useQuery(api.workOrders.listBySubtask, { subtaskId });
   const updateWorkOrder = useMutation(api.workOrders.update);
   const deleteWorkOrder = useMutation(api.workOrders.remove);
+  const reorderWorkOrders = useMutation(api.workOrders.reorder);
   const [expandedWo, setExpandedWo] = useState<Id<"workOrders"> | null>(null);
+
+  const handleReorder = useCallback((orderedIds: string[]) => {
+    reorderWorkOrders({
+      subtaskId,
+      orderedIds: orderedIds as Id<"workOrders">[],
+    });
+    toast("Work orders reordered");
+  }, [subtaskId, reorderWorkOrders, toast]);
 
   return (
     <div>
       <div className="flex items-center justify-between py-1">
-        <p className="text-xs font-medium text-muted-foreground">Work Orders under &quot;{subtaskTitle}&quot;</p>
+        <div className="flex items-center gap-2">
+          <p className="text-xs font-medium text-muted-foreground">Work Orders under &quot;{subtaskTitle}&quot;</p>
+          {workOrders && workOrders.length > 1 && (
+            <span className="text-[10px] text-muted-foreground/60">⠿ drag to reorder</span>
+          )}
+        </div>
         <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={onAddWorkOrder} title="Add a new work order">+ Add</Button>
       </div>
       {!workOrders ? <div className="h-8 animate-pulse rounded bg-muted" />
         : workOrders.length === 0 ? <p className="py-2 text-center text-xs text-muted-foreground">No work orders yet.</p>
-        : workOrders.map((wo) => {
-          const isWoExpanded = expandedWo === wo._id;
-          return (
-            <div key={wo._id} className="mb-1">
-              <div className={`flex items-center justify-between rounded-md border bg-card/50 px-3 py-2 ${isWoExpanded ? "ring-1 ring-primary/20" : ""}`}>
-                <div className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer" onClick={() => setExpandedWo(isWoExpanded ? null : wo._id)} title={isWoExpanded ? "Collapse" : "Expand to see details"}>
-                  <span className="text-sm">{statusIcons[wo.status]}</span>
-                  <span className={`text-sm truncate ${wo.status === "done" ? "text-muted-foreground line-through" : ""}`}>{wo.title}</span>
+        : (
+          <DragList
+            items={workOrders}
+            onReorder={handleReorder}
+            className="space-y-1"
+            renderItem={(wo, dragHandleProps) => {
+              const isWoExpanded = expandedWo === wo._id;
+              return (
+                <div>
+                  <div className={`flex items-center justify-between rounded-md border bg-card/50 px-2 py-2 ${isWoExpanded ? "ring-1 ring-primary/20" : ""}`}>
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <DragHandle {...dragHandleProps} />
+                      <span className="text-sm cursor-pointer" onClick={() => setExpandedWo(isWoExpanded ? null : wo._id)} title={statusLabels[wo.status]}>
+                        {statusIcons[wo.status]}
+                      </span>
+                      <span className={`text-sm truncate cursor-pointer ${wo.status === "done" ? "text-muted-foreground line-through" : ""}`} onClick={() => setExpandedWo(isWoExpanded ? null : wo._id)} title={isWoExpanded ? "Collapse" : "Expand"}>
+                        {wo.title}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <StatusSelect value={wo.status} onChange={(s) => { updateWorkOrder({ id: wo._id, status: s }); if (s === "done") toast("Work order completed!"); }} compact />
+                      {wo.assigneeName && <span className="text-[10px] text-muted-foreground" title="Assigned to">👤 {wo.assigneeName}</span>}
+                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-xs" onClick={() => { deleteWorkOrder({ id: wo._id }); toast("Deleted"); }} title="Delete work order">×</Button>
+                      <button onClick={() => setExpandedWo(isWoExpanded ? null : wo._id)} className="text-[10px] text-muted-foreground p-1" title={isWoExpanded ? "Collapse" : "Expand"}>
+                        {isWoExpanded ? "▼" : "▶"}
+                      </button>
+                    </div>
+                  </div>
+                  {isWoExpanded && (
+                    <div className="ml-4 mt-1 mb-2 grid gap-2 rounded border bg-card/30 p-2 sm:grid-cols-2">
+                      <CommentsSection workOrderId={wo._id} compact />
+                      <FileAttachments workOrderId={wo._id} compact />
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <StatusSelect value={wo.status} onChange={(s) => { updateWorkOrder({ id: wo._id, status: s }); if (s === "done") toast("Work order completed!"); }} compact />
-                  {wo.assigneeName && <span className="text-[10px] text-muted-foreground" title="Assigned to">👤 {wo.assigneeName}</span>}
-                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-xs" onClick={() => { deleteWorkOrder({ id: wo._id }); toast("Deleted"); }} title="Delete work order">×</Button>
-                  <button onClick={() => setExpandedWo(isWoExpanded ? null : wo._id)} className="text-[10px] text-muted-foreground p-1" title={isWoExpanded ? "Collapse" : "Expand"}>
-                    {isWoExpanded ? "▼" : "▶"}
-                  </button>
-                </div>
-              </div>
-              {isWoExpanded && (
-                <div className="ml-4 mt-1 mb-2 grid gap-2 rounded border bg-card/30 p-2 sm:grid-cols-2">
-                  <CommentsSection workOrderId={wo._id} compact />
-                  <FileAttachments workOrderId={wo._id} compact />
-                </div>
-              )}
-            </div>
-          );
-        })}
+              );
+            }}
+          />
+        )}
     </div>
   );
 }

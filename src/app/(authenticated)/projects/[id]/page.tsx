@@ -18,6 +18,8 @@ import { StatusSelect } from "@/components/status-select";
 import { RecentContacts } from "@/components/recent-contacts";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ActivityTimeline } from "@/components/activity-timeline";
+import { Breadcrumbs } from "@/components/breadcrumbs";
+import { ProjectDetailSkeleton } from "@/components/skeletons";
 import { useToast } from "@/components/toast";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
@@ -180,11 +182,7 @@ export default function ProjectDetailPage() {
   };
 
   if (!project) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="h-8 w-48 animate-pulse rounded bg-muted" />
-      </div>
-    );
+    return <ProjectDetailSkeleton />;
   }
 
   const doneTasks = tasks?.filter((t) => t.status === "done").length ?? 0;
@@ -220,9 +218,11 @@ export default function ProjectDetailPage() {
 
       {/* Header */}
       <div className="mb-6">
-        <button onClick={() => router.push("/projects")} className="mb-2 text-sm text-muted-foreground hover:text-foreground" title="Back to projects list">
-          ← Back to Projects
-        </button>
+      {/* Breadcrumbs */}
+      <Breadcrumbs items={[
+        { label: "Projects", href: "/projects" },
+        { label: project.name },
+      ]} />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold sm:text-3xl">{project.name}</h1>
