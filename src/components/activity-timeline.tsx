@@ -93,11 +93,11 @@ export function ActivityTimeline({ projectId, taskId, limit = 20, compact = fals
   // Pick the right query
   const byProject = useQuery(
     api.activityLog.listByProject,
-    projectId ? { projectId, limit: 100 } : "skip"
+    projectId ? { projectId } : "skip"
   );
   const byTask = useQuery(
     api.activityLog.listByTask,
-    taskId ? { taskId, limit: 100 } : "skip"
+    taskId ? { taskId } : "skip"
   );
 
   const entries = projectId ? byProject : byTask;
