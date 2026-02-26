@@ -20,7 +20,9 @@ const pages: SearchResult[] = [
   { id: "nav-board", type: "page", title: "Board", icon: "📋", href: "/board", subtitle: "Kanban view" },
   { id: "nav-projects", type: "page", title: "Projects", icon: "📁", href: "/projects", subtitle: "All projects" },
   { id: "nav-calendar", type: "page", title: "Calendar", icon: "📅", href: "/calendar", subtitle: "Due dates view" },
+  { id: "nav-timeline", type: "page", title: "Timeline", icon: "📊", href: "/timeline", subtitle: "Gantt chart view" },
   { id: "nav-analytics", type: "page", title: "Analytics", icon: "📈", href: "/analytics", subtitle: "Reports & charts" },
+  { id: "nav-templates", type: "page", title: "Templates", icon: "📄", href: "/templates", subtitle: "Project templates" },
   { id: "nav-invitations", type: "page", title: "Invitations", icon: "📬", href: "/invitations", subtitle: "Team invites" },
   { id: "nav-settings", type: "page", title: "Settings", icon: "⚙️", href: "/settings", subtitle: "Account settings" },
 ];

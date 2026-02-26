@@ -14,7 +14,7 @@ export const list = query({
       .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
       .collect();
 
-    return templates.sort((a, b) => b.updatedAt - a.updatedAt);
+    return templates.sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
   },
 });
 
@@ -101,6 +101,7 @@ export const saveFromProject = mutation({
       taskCount: tasks.length,
       subtaskCount: subtaskTotal,
       workOrderCount: workOrderTotal,
+      usageCount: 0,
       sourceProjectId: args.projectId,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -156,6 +157,7 @@ export const create = mutation({
       taskCount: tasks.length,
       subtaskCount,
       workOrderCount,
+      usageCount: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

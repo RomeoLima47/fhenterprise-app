@@ -143,36 +143,85 @@ export default defineSchema({
     .index("by_work_order", ["workOrderId"])
     .index("by_project", ["projectId"]),
 
-  // ─── TEMPLATES ──────────────────────────────────────────
+  // ═══ Project Templates ═══
   templates: defineTable({
     name: v.string(),
     description: v.optional(v.string()),
     ownerId: v.id("users"),
-    // Snapshot of the full structure stored as JSON
-    structure: v.string(), // JSON: { tasks: [{ title, description, priority, subtasks: [{ title, description, workOrders: [{ title, description }] }] }] }
+    structure: v.string(),
     taskCount: v.number(),
     subtaskCount: v.number(),
     workOrderCount: v.number(),
+    usageCount: v.optional(v.number()),
     sourceProjectId: v.optional(v.id("projects")),
+    updatedAt: v.optional(v.number()),
     createdAt: v.number(),
-    updatedAt: v.number(),
   }).index("by_owner", ["ownerId"]),
 
-  // ─── ACTIVITY LOG ───────────────────────────────────────
+  // ═══ Activity Logs (Audit Trail) ═══
   activityLog: defineTable({
     userId: v.id("users"),
     userName: v.string(),
-    action: v.string(), // "created", "updated", "deleted", "status_changed", "moved", "cloned", "assigned"
-    entityType: v.string(), // "project", "task", "subtask", "workOrder", "template"
+    entityType: v.union(
+      v.literal("project"),
+      v.literal("task"),
+      v.literal("subtask"),
+      v.literal("workOrder"),
+      v.literal("template")
+    ),
     entityId: v.string(),
     entityName: v.string(),
-    details: v.optional(v.string()), // JSON with changed fields, old/new values
-    // Optional parent context
     projectId: v.optional(v.id("projects")),
     taskId: v.optional(v.id("tasks")),
+    action: v.union(
+      v.literal("created"),
+      v.literal("updated"),
+      v.literal("deleted"),
+      v.literal("status_changed"),
+      v.literal("assigned"),
+      v.literal("moved"),
+      v.literal("commented"),
+      v.literal("template_saved"),
+      v.literal("template_used"),
+      v.literal("cloned")
+    ),
+    description: v.optional(v.string()),
+    details: v.optional(v.string()),
+    previousValue: v.optional(v.string()),
+    newValue: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_project", ["projectId"])
     .index("by_task", ["taskId"])
     .index("by_entity", ["entityType", "entityId"])
     .index("by_user", ["userId"]),
+
+  // ═══ Daily Field Reports ═══
+  // Structured daily logs per project — weather, crew, work performed, materials, safety
+  // Restricted to owner/editor roles (viewers cannot see)
+  dailyReports: defineTable({
+    projectId: v.id("projects"),
+    date: v.number(),                    // midnight timestamp for the report date
+    status: v.union(v.literal("draft"), v.literal("submitted")),
+    // Weather conditions (stored as JSON string)
+    // { conditions: "Sunny"|"Cloudy"|"Rainy"|"Stormy"|"Snow"|"Windy", tempHigh?: number, tempLow?: number, notes?: string }
+    weather: v.optional(v.string()),
+    // Crew entries (JSON array string)
+    // [{ trade: "Electrician", headcount: 4, hours: 8 }, ...]
+    crewEntries: v.optional(v.string()),
+    totalCrewCount: v.optional(v.number()),
+    totalManHours: v.optional(v.number()),
+    // Narratives
+    workPerformed: v.optional(v.string()),
+    materialsUsed: v.optional(v.string()),
+    equipmentOnSite: v.optional(v.string()),
+    safetyNotes: v.optional(v.string()),
+    delays: v.optional(v.string()),
+    visitors: v.optional(v.string()),
+    // Author info
+    authorId: v.id("users"),
+    authorName: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_project", ["projectId"])
+    .index("by_project_date", ["projectId", "date"]),
 });

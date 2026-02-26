@@ -237,7 +237,10 @@ export default function ProjectDetailPage() {
               {project.endDate && <span title="End date">→ {formatDate(project.endDate)}</span>}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" className="text-xs" onClick={() => router.push(`/projects/${projectId}/reports`)} title="View and create daily field reports">
+              📋 Daily Reports
+            </Button>
             {isOwner && (
               <Button variant="outline" className="text-xs" onClick={() => { setTemplateName(`${project.name} Template`); setTemplateDesc(project.description ?? ""); setTemplateOpen(true); }} title="Save project structure as a reusable template">
                 📐 Save as Template

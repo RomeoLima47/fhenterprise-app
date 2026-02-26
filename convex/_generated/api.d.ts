@@ -16,6 +16,8 @@ import type * as board from "../board.js";
 import type * as calendar from "../calendar.js";
 import type * as comments from "../comments.js";
 import type * as crons from "../crons.js";
+import type * as dailyReports from "../dailyReports.js";
+import type * as gantt from "../gantt.js";
 import type * as invitations from "../invitations.js";
 import type * as notes from "../notes.js";
 import type * as notifications from "../notifications.js";
@@ -45,6 +47,8 @@ declare const fullApi: ApiFromModules<{
   calendar: typeof calendar;
   comments: typeof comments;
   crons: typeof crons;
+  dailyReports: typeof dailyReports;
+  gantt: typeof gantt;
   invitations: typeof invitations;
   notes: typeof notes;
   notifications: typeof notifications;

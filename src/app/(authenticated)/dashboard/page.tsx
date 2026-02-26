@@ -27,6 +27,108 @@ function formatCountdown(endDate: number) {
   return { text: `${days}d left`, color: "text-muted-foreground" };
 }
 
+/* ─── Mini Project Timeline ──────────────────────────────────── */
+function MiniTimeline() {
+  const router = useRouter();
+  const timelines = useQuery(api.gantt.projectTimelines);
+
+  if (!timelines || timelines.length === 0) return null;
+
+  // Calculate range across all projects
+  const now = Date.now();
+  let minDate = now;
+  let maxDate = now;
+  for (const p of timelines) {
+    if (p.startDate && p.startDate < minDate) minDate = p.startDate;
+    if (p.endDate && p.endDate > maxDate) maxDate = p.endDate;
+  }
+  // Add padding
+  const range = maxDate - minDate || 1;
+  const padded = range * 0.1;
+  minDate -= padded;
+  maxDate += padded;
+  const totalRange = maxDate - minDate;
+
+  const todayPct = ((now - minDate) / totalRange) * 100;
+
+  return (
+    <Card>
+      <CardContent className="pt-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold">📊 Project Timeline</h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs"
+            onClick={() => router.push("/timeline")}
+          >
+            Full view →
+          </Button>
+        </div>
+        <div className="space-y-2.5">
+          {timelines.map((project) => {
+            const start = project.startDate || now;
+            const end = project.endDate || now;
+            const barLeft = ((start - minDate) / totalRange) * 100;
+            const barWidth = Math.max(((end - start) / totalRange) * 100, 2);
+
+            return (
+              <div
+                key={project.id}
+                className="cursor-pointer group"
+                onClick={() => router.push(`/projects/${project.id}`)}
+              >
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-xs font-medium truncate group-hover:text-primary transition-colors">
+                    {project.name}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground ml-2 flex-shrink-0">
+                    {project.progress}%
+                  </span>
+                </div>
+                <div className="relative h-4 w-full rounded-full bg-muted overflow-hidden">
+                  {/* Bar background */}
+                  <div
+                    className="absolute top-0 h-full rounded-full opacity-25"
+                    style={{
+                      left: `${barLeft}%`,
+                      width: `${barWidth}%`,
+                      backgroundColor: project.color,
+                    }}
+                  />
+                  {/* Progress fill */}
+                  <div
+                    className="absolute top-0 h-full rounded-full transition-all"
+                    style={{
+                      left: `${barLeft}%`,
+                      width: `${barWidth * (project.progress / 100)}%`,
+                      backgroundColor: project.color,
+                    }}
+                  />
+                  {/* Today marker */}
+                  {todayPct >= barLeft && todayPct <= barLeft + barWidth && (
+                    <div
+                      className="absolute top-0 h-full w-px bg-foreground/40"
+                      style={{ left: `${todayPct}%` }}
+                    />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {/* Today marker label */}
+        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <span className="inline-block h-2 w-px bg-foreground/40" />
+          <span>Today</span>
+          <span className="ml-auto">{timelines.length} active project{timelines.length !== 1 ? "s" : ""}</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─── Dashboard ──────────────────────────────────────────────── */
 export default function DashboardPage() {
   const router = useRouter();
   const { user } = useUser();
@@ -63,6 +165,7 @@ export default function DashboardPage() {
       <div className="mb-6 flex flex-wrap gap-2">
         <Button size="sm" onClick={() => router.push("/tasks")}>📋 Tasks</Button>
         <Button size="sm" variant="outline" onClick={() => router.push("/board")}>📊 Board</Button>
+        <Button size="sm" variant="outline" onClick={() => router.push("/timeline")}>📊 Timeline</Button>
         <Button size="sm" variant="outline" onClick={() => router.push("/analytics")}>📈 Analytics</Button>
         <Button size="sm" variant="outline" onClick={() => router.push("/calendar")}>📅 Calendar</Button>
       </div>
@@ -95,7 +198,8 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* ─── Three-column grid: Deadlines | Activity | Timeline ─── */}
+      <div className="grid gap-6 lg:grid-cols-3">
         {/* Upcoming Deadlines */}
         <Card>
           <CardContent className="pt-4">
@@ -155,6 +259,9 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Mini Timeline */}
+        <MiniTimeline />
       </div>
     </div>
   );
