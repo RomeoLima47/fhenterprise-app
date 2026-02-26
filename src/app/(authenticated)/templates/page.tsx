@@ -830,7 +830,7 @@ export default function TemplatesPage() {
                           year: "numeric",
                         })}
                         {" · "}Updated{" "}
-                        {new Date(tmpl.updatedAt).toLocaleDateString("en-US", {
+                        {new Date(tmpl.updatedAt ?? tmpl.createdAt).toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
                           year: "numeric",
